@@ -1,0 +1,70 @@
+OCAF 0.1.1 — Windows x86_64
+================================
+
+OCAF (Onood's Compressed Audio File) é um codec de áudio lossless.
+O PCM decodificado é bit-exato: nada é arredondado ou descartado.
+
+Conteúdo deste pacote
+--------------------
+  ocaf.exe        programa portátil, não precisa instalar
+  LEIA-ME.txt     este arquivo
+  LICENSE.txt     licença MIT
+  SHA256SUMS.txt  checksum do ocaf.exe
+  BUILD.txt       versão, alvo e commit de origem
+
+Requisitos
+----------
+  Windows 10 ou 11, 64 bits.
+  Não é necessário instalar Rust, MinGW ou qualquer runtime extra.
+
+Aviso do Windows
+----------------
+  O executável não tem assinatura digital. Se o SmartScreen aparecer:
+    1. Clique em "Mais informações".
+    2. Clique em "Executar assim mesmo".
+  Só execute arquivos recebidos de alguém em quem você confia.
+
+Teste rápido
+------------
+Abra o Prompt de Comando ou PowerShell na pasta deste arquivo:
+
+  ocaf.exe --version
+
+  ocaf.exe encode musica.wav musica.ocaf
+  ocaf.exe info musica.ocaf
+  ocaf.exe verify musica.ocaf
+  ocaf.exe decode musica.ocaf restaurada.wav
+
+Se o caminho tiver espaços, use aspas:
+
+  ocaf.exe encode "C:\Minha Música\musica.wav" "C:\Minha Música\musica.ocaf"
+
+O OCAF recebe WAV (PCM 16/24/32 bits ou float 32/64 bits).
+Ele não abre MP3, AAC ou FLAC diretamente; converta para WAV antes
+(por exemplo, com ffmpeg ou Audacity).
+
+Comandos úteis
+--------------
+  ocaf.exe encode entrada.wav saida.ocaf
+  ocaf.exe decode saida.ocaf restaurada.wav
+  ocaf.exe info saida.ocaf
+  ocaf.exe verify saida.ocaf
+  ocaf.exe compare entrada.wav saida.ocaf
+  ocaf.exe benchmark entrada.wav --iterations 5
+
+Use --force para sobrescrever um arquivo que já existe.
+
+Observações
+-----------
+  - O áudio decodificado é idêntico ao original; o cabeçalho WAV é
+    regravado, então o arquivo WAV inteiro pode não ser byte-a-byte igual.
+  - O codificador é single-thread e ainda é mais lento que codecs maduros.
+  - Float64 de mantissa completa é o caso de pior compressão, mas continua
+    bit-exato.
+  - Esta é uma versão de teste 0.1.1, sem auditoria de segurança.
+
+Ao reportar um problema, envie:
+  - a saída de `ocaf.exe --version`;
+  - o comando completo que falhou;
+  - a mensagem de erro;
+  - se possível, um WAV pequeno que reproduza o problema.
