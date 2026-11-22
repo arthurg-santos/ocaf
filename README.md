@@ -73,6 +73,27 @@ cargo install --path crates/ocaf-cli
 The release profile uses thin LTO and one codegen unit; debug builds are much
 slower at encoding.
 
+### Windows
+
+OCAF builds natively on Windows 10/11 with the standard Rust toolchain:
+
+```powershell
+git clone git@github.com:arthurg-santos/ocaf.git
+cd ocaf
+cargo build --release
+.\target\release\ocaf.exe --version
+```
+
+A portable `ocaf-0.1.1-windows-x86_64.zip` can be produced from Linux with
+`./scripts/build-windows.sh`, or downloaded from the Windows GitHub Actions
+artifact if you have access to this private repository. Send the zip itself to
+testers; they do not need a GitHub account. The archive contains `ocaf.exe`, a
+Portuguese quick-start
+(`LEIA-ME.txt`), the MIT license, a SHA-256 checksum and build metadata. The
+executable is unsigned, so SmartScreen may ask for confirmation. See
+[WINDOWS.md](WINDOWS.md) for cross-compiling, Wine testing, packaging and
+tester instructions.
+
 ## Usage
 
 ```sh

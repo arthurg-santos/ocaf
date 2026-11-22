@@ -15,6 +15,14 @@ with the `ocaf` 0.1.1 reference implementation.
 - Added a CLI regression test that encodes, decodes and verifies a file using
   only relative output paths.
 
+### Added
+
+- Windows x86_64 support: cross-compilation with `x86_64-pc-windows-gnu`,
+  `scripts/build-windows.sh` packaging, a portable zip with a Portuguese
+  tester guide and SHA-256 checksum, and `WINDOWS.md` instructions.
+- A GitHub Actions workflow that builds, tests, packages and uploads the
+  Windows archive on pushes and pull requests.
+
 The codec, bitstream format and compression behavior are unchanged from
 0.1.0. The benchmark measurements in `BENCHMARKS.md` were taken with 0.1.0 and
 remain representative.
