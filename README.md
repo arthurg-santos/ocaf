@@ -201,10 +201,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace -- --test-threads=1
 ```
 
-The integration suite covers every supported format, sample rate and channel
-count, silence, noise, tones, synthetic music, extreme values, tiny and
-incomplete final blocks, long streams, metadata, deliberate corruption,
-version checks and randomized property round-trips. Tests are run
+The integration suite covers every supported sample format, multiple sample
+rates and channel counts, silence, noise, tones, synthetic music, extreme
+values, tiny and incomplete final blocks, long streams, metadata, deliberate
+corruption, version checks and randomized property round-trips. Tests are run
 single-threaded because the encoder and decoder allocate large scratch buffers;
 they are deterministic and independent.
 
