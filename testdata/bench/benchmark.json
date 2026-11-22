@@ -1,0 +1,384 @@
+[
+  {
+    "file": "silence16.wav",
+    "kind": "int",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 16,
+    "float": false,
+    "pcm_bytes": 384000,
+    "ocaf_bytes": 433,
+    "ocaf_encode_s": 0.005644566999762901,
+    "ocaf_decode_s": 0.0031360530001620646,
+    "external": {
+      "FLAC": {
+        "size": 8624,
+        "decode": 0.30068121800013614,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 1602,
+        "decode": 0.29346936700039805,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 330,
+        "decode": 0.004094954999345646,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "noise16.wav",
+    "kind": "int",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 16,
+    "float": false,
+    "pcm_bytes": 576000,
+    "ocaf_bytes": 576559,
+    "ocaf_encode_s": 0.19252865700036637,
+    "ocaf_decode_s": 0.00805168499937281,
+    "external": {
+      "FLAC": {
+        "size": 593571,
+        "decode": 0.2948725280002691,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 577026,
+        "decode": 0.29907835599988175,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 587554,
+        "decode": 0.006519686000501679,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "pinknoise16.wav",
+    "kind": "int",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 16,
+    "float": false,
+    "pcm_bytes": 960000,
+    "ocaf_bytes": 848453,
+    "ocaf_encode_s": 0.30983843200010597,
+    "ocaf_decode_s": 0.02477067800009536,
+    "external": {
+      "FLAC": {
+        "size": 857274,
+        "decode": 0.3017988769997828,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 852064,
+        "decode": 0.30246581499977765,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 842070,
+        "decode": 0.011862069000017073,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "sine16.wav",
+    "kind": "int",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 16,
+    "float": false,
+    "pcm_bytes": 960000,
+    "ocaf_bytes": 145611,
+    "ocaf_encode_s": 0.20348654399913357,
+    "ocaf_decode_s": 0.021917363999818917,
+    "external": {
+      "FLAC": {
+        "size": 159618,
+        "decode": 0.29693122600019706,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 270441,
+        "decode": 0.3007619350000823,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 196002,
+        "decode": 0.014639269999861426,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "music16.wav",
+    "kind": "int",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 16,
+    "float": false,
+    "pcm_bytes": 1728000,
+    "ocaf_bytes": 877692,
+    "ocaf_encode_s": 0.45870951899996726,
+    "ocaf_decode_s": 0.04519458899994788,
+    "external": {
+      "FLAC": {
+        "size": 882144,
+        "decode": 0.3035881450005036,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 909866,
+        "decode": 0.31462372399982996,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 870378,
+        "decode": 0.026571599999442697,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "sine24_96k.wav",
+    "kind": "int",
+    "channels": 2,
+    "rate": 96000,
+    "bits": 24,
+    "float": false,
+    "pcm_bytes": 1728000,
+    "ocaf_bytes": 171223,
+    "ocaf_encode_s": 0.2012660970003708,
+    "ocaf_decode_s": 0.025811820999479096,
+    "external": {
+      "FLAC": {
+        "size": 441575,
+        "decode": 0.30370997000045463,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 878521,
+        "decode": 0.31014708499969856,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 359938,
+        "decode": 0.015880103999734274,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "sine32_mono.wav",
+    "kind": "int",
+    "channels": 1,
+    "rate": 48000,
+    "bits": 32,
+    "float": false,
+    "pcm_bytes": 576000,
+    "ocaf_bytes": 56527,
+    "ocaf_encode_s": 0.04468108499986556,
+    "ocaf_decode_s": 0.008491745000355877,
+    "external": {
+      "FLAC": {
+        "size": 159472,
+        "decode": 0.3080843689995163,
+        "exact": false,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 243775,
+        "decode": 0.3181727109995336,
+        "exact": false,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 299896,
+        "decode": 0.007997904000148992,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "surround24_6ch.wav",
+    "kind": "int",
+    "channels": 6,
+    "rate": 48000,
+    "bits": 24,
+    "float": false,
+    "pcm_bytes": 1728000,
+    "ocaf_bytes": 158507,
+    "ocaf_encode_s": 0.17159377699954348,
+    "ocaf_decode_s": 0.026377537999906053,
+    "external": {
+      "FLAC": {
+        "size": 526991,
+        "decode": 0.3184075440003653,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 877057,
+        "decode": 0.3271786389996123,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 342968,
+        "decode": 0.02154858200083254,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "tone_f32.wav",
+    "kind": "float",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 32,
+    "float": true,
+    "pcm_bytes": 1152000,
+    "ocaf_bytes": 74880,
+    "ocaf_encode_s": 0.2308078550004211,
+    "ocaf_decode_s": 0.01758635599981062,
+    "external": {
+      "FLAC": {
+        "size": 98299,
+        "decode": 0.31069453500003874,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 435624,
+        "decode": 0.3044236699997782,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 111078,
+        "decode": 0.013558139000451774,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "tone_f64.wav",
+    "kind": "float",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 64,
+    "float": true,
+    "pcm_bytes": 2304000,
+    "ocaf_bytes": 74880,
+    "ocaf_encode_s": 0.3349870310003098,
+    "ocaf_decode_s": 0.019663181000396435,
+    "external": {
+      "FLAC": {
+        "size": 98299,
+        "decode": 0.3033050069998353,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 435624,
+        "decode": 0.3161870660005661,
+        "exact": true,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "error": "/home/arthur/\u00c1rea de trabalho/Arthur/ocaf/testdata/generated/tone_f64.wav is an unsupported .WAV format!",
+        "exact": false,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "sine_f32.wav",
+    "kind": "float",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 32,
+    "float": true,
+    "pcm_bytes": 1152000,
+    "ocaf_bytes": 360017,
+    "ocaf_encode_s": 0.4015016149996882,
+    "ocaf_decode_s": 0.020978397000362747,
+    "external": {
+      "FLAC": {
+        "size": 251063,
+        "decode": 0.29815857900030096,
+        "exact": false,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 443949,
+        "decode": 0.3165265369998451,
+        "exact": false,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "size": 255466,
+        "decode": 0.012927965000017139,
+        "exact": true,
+        "method": "native -hh -x4"
+      }
+    }
+  },
+  {
+    "file": "sine_f64.wav",
+    "kind": "float",
+    "channels": 2,
+    "rate": 48000,
+    "bits": 64,
+    "float": true,
+    "pcm_bytes": 2304000,
+    "ocaf_bytes": 1344307,
+    "ocaf_encode_s": 0.5140479499996218,
+    "ocaf_decode_s": 0.024194329000238213,
+    "external": {
+      "FLAC": {
+        "size": 252269,
+        "decode": 0.31270656299966504,
+        "exact": false,
+        "method": "ffmpeg"
+      },
+      "ALAC": {
+        "size": 444350,
+        "decode": 0.3015341789996455,
+        "exact": false,
+        "method": "ffmpeg"
+      },
+      "WavPack": {
+        "error": "/home/arthur/\u00c1rea de trabalho/Arthur/ocaf/testdata/generated/sine_f64.wav is an unsupported .WAV format!",
+        "exact": false,
+        "method": "native -hh -x4"
+      }
+    }
+  }
+]
