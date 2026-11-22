@@ -14,9 +14,10 @@ This repository contains the reference implementation:
 - `ocaf` — command-line encoder, decoder, inspector, verifier and benchmark
   tool.
 
-**Status:** format 1.0, reference implementation 0.1.1. The codec is real,
-tested and bit-exact, but it has not been security-reviewed for untrusted
-media and is not yet a drop-in replacement for a mature codec such as FLAC.
+**Status:** format 1.0, reference implementation 0.1.1, open source under the
+MIT license. The codec is real, tested and bit-exact, but it has not been
+security-reviewed for untrusted media and is not yet a drop-in replacement for
+a mature codec such as FLAC.
 
 ## Highlights
 
@@ -61,7 +62,7 @@ the source; WAV container headers are regenerated rather than byte-copied.
 Requirements: Rust 1.75+ and Cargo. No C compiler or system library is needed.
 
 ```sh
-git clone git@github.com:arthurg-santos/ocaf.git
+git clone https://github.com/arthurg-santos/ocaf.git
 cd ocaf
 cargo build --release
 ./target/release/ocaf --version
@@ -78,7 +79,7 @@ slower at encoding.
 OCAF builds natively on Windows 10/11 with the standard Rust toolchain:
 
 ```powershell
-git clone git@github.com:arthurg-santos/ocaf.git
+git clone https://github.com/arthurg-santos/ocaf.git
 cd ocaf
 cargo build --release
 .\target\release\ocaf.exe --version
@@ -86,13 +87,11 @@ cargo build --release
 
 A portable `ocaf-0.1.1-windows-x86_64.zip` can be produced from Linux with
 `./scripts/build-windows.sh`, or downloaded from the Windows GitHub Actions
-artifact if you have access to this private repository. Send the zip itself to
-testers; they do not need a GitHub account. The archive contains `ocaf.exe`, a
-Portuguese quick-start
-(`LEIA-ME.txt`), the MIT license, a SHA-256 checksum and build metadata. The
-executable is unsigned, so SmartScreen may ask for confirmation. See
-[WINDOWS.md](WINDOWS.md) for cross-compiling, Wine testing, packaging and
-tester instructions.
+workflow. The zip can also be sent directly to testers. The archive contains
+`ocaf.exe`, a Portuguese quick-start (`LEIA-ME.txt`), the MIT license, a
+SHA-256 checksum and build metadata. The executable is unsigned, so SmartScreen
+may ask for confirmation. See [WINDOWS.md](WINDOWS.md) for cross-compiling,
+Wine testing, packaging and tester instructions.
 
 ## Usage
 

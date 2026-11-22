@@ -14,7 +14,7 @@ release is a single `ocaf.exe` with no installer and no MinGW runtime DLLs.
 ## Build natively on Windows
 
 ```powershell
-git clone git@github.com:arthurg-santos/ocaf.git
+git clone https://github.com/arthurg-santos/ocaf.git
 cd ocaf
 cargo build --release
 .\target\release\ocaf.exe --version
@@ -110,5 +110,7 @@ Compare the result with `SHA256SUMS.txt`.
 
 `.github/workflows/windows.yml` builds and tests the project on
 `windows-latest` and uploads a zip artifact on every push and pull request.
-The workflow artifact is visible to users who have access to this private
-repository.
+The artifact is available from the repository's Actions page; GitHub may
+require an account to download it. Artifacts expire according to GitHub's
+retention policy, so keep your own copy of the zip if you need a permanent
+build.
