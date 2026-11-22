@@ -1,0 +1,68 @@
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace -- --test-threads=1
+
+      - name: Build release
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: cargo build --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "([0-9]+\.[0-9]+\.[0-9]+)"').Matches[0].Groups[1].Value
+          $staging = "dist/staging"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item target/release/ocaf.exe "$staging/ocaf.exe"
+          Copy-Item LICENSE "$staging/LICENSE.txt"
+          Copy-Item packaging/windows/LEIA-ME.txt "$staging/LEIA-ME.txt"
+          @(
+            "OCAF $version"
+            "target: x86_64-pc-windows-msvc"
+            "built: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+            "commit: $env:GITHUB_SHA"
+            "rustc: $((rustc --version))"
+          ) | Set-Content "$staging/BUILD.txt"
+          $hash = (Get-FileHash "$staging/ocaf.exe" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ocaf.exe" | Set-Content "$staging/SHA256SUMS.txt"
+          $archive = "dist/ocaf-$version-windows-x86_64.zip"
+          Compress-Archive -Path "$staging/*" -DestinationPath $archive -Force
+          Remove-Item -Recurse -Force $staging
+          Get-ChildItem dist
+          Get-FileHash $archive -Algorithm SHA256
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocaf-windows-x86_64
+          path: dist/ocaf-*-windows-x86_64.zip
+          if-no-files-found: error
