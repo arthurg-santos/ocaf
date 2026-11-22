@@ -596,6 +596,13 @@ fn best(values: &[f64]) -> f64 {
     values.iter().copied().fold(f64::INFINITY, f64::min)
 }
 
+fn output_parent(output: &Path) -> &Path {
+    output
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
+}
+
 fn same_path(input: &Path, output: &Path) -> bool {
     let Ok(input) = fs::canonicalize(input) else {
         return false;
@@ -603,9 +610,8 @@ fn same_path(input: &Path, output: &Path) -> bool {
     let output = if output.exists() {
         fs::canonicalize(output).ok()
     } else {
-        output
-            .parent()
-            .and_then(|parent| fs::canonicalize(parent).ok())
+        fs::canonicalize(output_parent(output))
+            .ok()
             .map(|parent| parent.join(output.file_name().unwrap_or_default()))
     };
     output.is_some_and(|output| output == input)
@@ -625,7 +631,7 @@ fn write_atomically<T>(
     if output.is_dir() {
         return Err(format!("{} is a directory", output.display()));
     }
-    let parent = output.parent().unwrap_or_else(|| Path::new("."));
+    let parent = output_parent(output);
     if !parent.exists() {
         return Err(format!(
             "output directory {} does not exist",
@@ -727,4 +733,24 @@ fn wav_pcm_equal(original: &Path, decoded: &Path) -> CmdResult<bool> {
         }
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::output_parent;
+    use std::path::Path;
+
+    #[test]
+    fn relative_outputs_use_the_current_directory() {
+        assert_eq!(output_parent(Path::new("musica.ocaf")), Path::new("."));
+        assert_eq!(output_parent(Path::new("./musica.ocaf")), Path::new("."));
+        assert_eq!(
+            output_parent(Path::new("album/musica.ocaf")),
+            Path::new("album")
+        );
+        assert_eq!(
+            output_parent(Path::new("/tmp/musica.ocaf")),
+            Path::new("/tmp")
+        );
+    }
 }
