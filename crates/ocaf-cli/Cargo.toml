@@ -1,0 +1,16 @@
+[package]
+name = "ocaf-cli"
+description = "Command-line interface for OCAF (Onood's Compressed Audio File)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "ocaf"
+path = "src/main.rs"
+
+[dependencies]
+ocaf-core = { path = "../ocaf-core" }
