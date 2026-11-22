@@ -127,7 +127,7 @@ u8  value[payload_length - 2 - key_length]
 
 Recommended keys include `TITLE`, `ARTIST`, `ALBUM`, `DATE`, `GENRE`,
 `COMMENT`, `TRACKNUMBER`, `SOFTWARE` and `ENCODER`. The encoder always writes
-an `ENCODER` value of the form `ocaf 0.1.0`. Duplicate keys are allowed at the
+an `ENCODER` value of the form `ocaf <version>`. Duplicate keys are allowed at the
 format level; the reference `Metadata` helper replaces an existing key.
 
 ### 4.3 `PAD ` chunk

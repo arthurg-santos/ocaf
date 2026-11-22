@@ -2,7 +2,22 @@
 
 All notable changes to OCAF are documented here. The format version and the
 implementation version are separate: this release implements OCAF format 1.0
-with the `ocaf` 0.1.0 reference implementation.
+with the `ocaf` 0.1.1 reference implementation.
+
+## [0.1.1] - 2026-11-22
+
+### Fixed
+
+- `ocaf encode` and `ocaf decode` now accept a relative output filename with
+  no directory component, such as `ocaf encode musica.wav musica.ocaf`. The
+  empty parent returned by the path API was treated as a missing directory;
+  it now correctly resolves to the current directory.
+- Added a CLI regression test that encodes, decodes and verifies a file using
+  only relative output paths.
+
+The codec, bitstream format and compression behavior are unchanged from
+0.1.0. The benchmark measurements in `BENCHMARKS.md` were taken with 0.1.0 and
+remain representative.
 
 ## [0.1.0] - 2026-11-22
 

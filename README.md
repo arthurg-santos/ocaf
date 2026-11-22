@@ -14,7 +14,7 @@ This repository contains the reference implementation:
 - `ocaf` — command-line encoder, decoder, inspector, verifier and benchmark
   tool.
 
-**Status:** format 1.0, reference implementation 0.1.0. The codec is real,
+**Status:** format 1.0, reference implementation 0.1.1. The codec is real,
 tested and bit-exact, but it has not been security-reviewed for untrusted
 media and is not yet a drop-in replacement for a mature codec such as FLAC.
 

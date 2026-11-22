@@ -21,7 +21,9 @@ the machine and ambient load).
 The machine was not isolated: it is a normal Fedora desktop session. Each
 timing is the best of three runs to reduce scheduler noise. Only sizes and
 bit-exactness are deterministic; treat throughput as indicative rather than a
-laboratory measurement.
+laboratory measurement. The measurements were taken with 0.1.0. Version 0.1.1
+fixes only relative output-path handling in the CLI and does not change the
+codec or the encoded output.
 
 ## 2. Corpus
 
