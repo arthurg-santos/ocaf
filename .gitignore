@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+testdata/generated/
+*.tmp
+*.ocaf
+*.wav

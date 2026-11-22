@@ -1,0 +1,13 @@
+[package]
+name = "ocaf-core"
+description = "Core container, lossless codec and WAV I/O for OCAF (Onood's Compressed Audio File)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
