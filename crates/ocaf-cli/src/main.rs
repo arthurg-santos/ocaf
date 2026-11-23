@@ -35,6 +35,7 @@ fn main() -> ExitCode {
     let result = match command.as_str() {
         "encode" => commands::encode(&args),
         "decode" => commands::decode(&args),
+        "play" => commands::play(&args),
         "info" => commands::info(&args),
         "verify" => commands::verify_cmd(&args),
         "compare" => commands::compare(&args),
@@ -61,6 +62,7 @@ fn print_help() {
 Usage:\n\
   ocaf encode <input.wav> <output.ocaf> [options]   Encode a WAV file\n\
   ocaf decode <input.ocaf> <output.wav> [options]   Decode to WAV\n\
+  ocaf play <file.ocaf> [--player PATH]              Play through a system player\n\
   ocaf info <file.ocaf>                              Show container information\n\
   ocaf verify <file.ocaf>                            Decode and verify all checksums\n\
   ocaf compare <input.wav> <file.ocaf>               Compare sizes and formats\n\
@@ -69,6 +71,7 @@ Usage:\n\
 Commands:\n\
   encode      Encode uncompressed WAV (PCM 16/24/32, float 32/64) to OCAF\n\
   decode      Decode OCAF to a bit-identical WAV file\n\
+  play        Decode to a temporary WAV and play it with a system player\n\
   info        Read the header and metadata without decoding audio\n\
   verify      Fully decode the stream and check frame and PCM checksums\n\
   compare     Compare a WAV/OCAF pair\n\
@@ -80,6 +83,7 @@ General options:\n\
 \n\
 Examples:\n\
   ocaf encode music.wav music.ocaf\n\
+  ocaf play music.ocaf\n\
   ocaf decode music.ocaf restored.wav\n\
   ocaf info music.ocaf\n\
   ocaf verify music.ocaf\n\
@@ -113,6 +117,20 @@ Options:\n\
 \n\
 Decoding verifies every frame checksum and the whole-stream PCM checksum.\n\
 Metadata fields that WAV can represent are written into a LIST/INFO chunk.\n"
+        ),
+        "play" => println!(
+            "Usage: ocaf play <file.ocaf> [--player PATH]\n\
+\n\
+Decodes the whole stream to a temporary WAV file, verifies every checksum,\n\
+plays it through an installed system player and removes the temporary file.\n\
+Playback starts after decoding, so long files open with a delay.\n\
+\n\
+Options:\n\
+  --player PATH   Use this player executable instead of auto-detection\n\
+  -h, --help      Show this help\n\
+\n\
+Auto-detection tries pw-play, paplay, aplay, ffplay, mpv, vlc and SoX play\n\
+on Linux, afplay on macOS, and ffplay, mpv, vlc or PowerShell on Windows.\n"
         ),
         "info" => println!(
             "Usage: ocaf info <file.ocaf>\n\

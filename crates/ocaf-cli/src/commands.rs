@@ -2,12 +2,15 @@
 
 use crate::format::{bytes, channel_layout, duration, number, throughput};
 use ocaf_core::wav::WavReader;
-use ocaf_core::{decode_to_wav, encode_wav, probe, verify, EncodeOptions, StereoMode};
+use ocaf_core::{
+    decode_to_wav, encode_wav, probe, verify, EncodeOptions, SampleFormat, StereoMode,
+};
 use std::env;
 use std::ffi::OsString;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 type CmdResult<T> = Result<T, String>;
@@ -32,6 +35,11 @@ struct DecodeArgs {
 struct BenchmarkArgs {
     input: PathBuf,
     iterations: u32,
+}
+
+struct PlayArgs {
+    input: PathBuf,
+    player: Option<PathBuf>,
 }
 
 pub fn encode(args: &[OsString]) -> CmdResult<()> {
@@ -117,6 +125,56 @@ pub fn decode(args: &[OsString]) -> CmdResult<()> {
         throughput(summary.pcm_bytes, elapsed),
         elapsed
     );
+    Ok(())
+}
+
+pub fn play(args: &[OsString]) -> CmdResult<()> {
+    let parsed = parse_play_args(args)?;
+    let probe_info = probe(
+        File::open(&parsed.input)
+            .map_err(|e| format!("cannot open {}: {e}", parsed.input.display()))?,
+    )
+    .map_err(err)?;
+    let is_float = probe_info.header.info.sample_format == SampleFormat::Float;
+    let player = resolve_player(parsed.player.as_deref(), is_float)?;
+
+    let started = Instant::now();
+    let temp = TempPath::new("play", "wav");
+    let summary = {
+        let input = File::open(&parsed.input)
+            .map_err(|e| format!("cannot open {}: {e}", parsed.input.display()))?;
+        let output = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp.0)
+            .map_err(|e| format!("cannot create temporary file {}: {e}", temp.0.display()))?;
+        decode_to_wav(input, output).map_err(err)?
+    };
+    let elapsed = started.elapsed().as_secs_f64();
+
+    println!("Playing {}", parsed.input.display());
+    println!(
+        "  Audio:   {} Hz, {}, {}-bit {}",
+        summary.info.sample_rate,
+        channel_layout(summary.info.channels, summary.info.channel_mask),
+        summary.info.bits_per_sample,
+        summary.info.sample_format.name()
+    );
+    println!(
+        "  Samples: {} ({})",
+        number(summary.info.total_samples),
+        duration(summary.info.duration_seconds())
+    );
+    println!(
+        "  Decoded: {} in {elapsed:.3} s ({})",
+        bytes(summary.pcm_bytes),
+        throughput(summary.pcm_bytes, elapsed)
+    );
+    println!("  Player:  {}", player.name);
+    println!();
+    println!("Press Ctrl+C to stop.");
+    player.run(&temp.0)?;
+    println!("Finished.");
     Ok(())
 }
 
@@ -510,6 +568,37 @@ fn parse_single_path(args: &[OsString], command: &str) -> CmdResult<(PathBuf, bo
     Ok((positionals.remove(0), force))
 }
 
+fn parse_play_args(args: &[OsString]) -> CmdResult<PlayArgs> {
+    let mut positionals = Vec::new();
+    let mut player = None;
+    let mut index = 0;
+    while index < args.len() {
+        let text = args[index].to_string_lossy().to_string();
+        let (name, inline) = split_option(&text);
+        match name.as_str() {
+            "--player" => {
+                let value = take_value(args, &mut index, &name, inline)?;
+                if value.is_empty() {
+                    return Err("--player expects a non-empty executable path".to_string());
+                }
+                player = Some(PathBuf::from(value));
+            }
+            other if other.starts_with('-') => {
+                return Err(format!("unknown option {other} for `ocaf play`"));
+            }
+            _ => positionals.push(PathBuf::from(&args[index])),
+        }
+        index += 1;
+    }
+    if positionals.len() != 1 {
+        return Err("play expects exactly one input OCAF file".to_string());
+    }
+    Ok(PlayArgs {
+        input: positionals.remove(0),
+        player,
+    })
+}
+
 fn parse_benchmark_args(args: &[OsString]) -> CmdResult<BenchmarkArgs> {
     let mut positionals = Vec::new();
     let mut iterations = 3u32;
@@ -674,6 +763,226 @@ fn write_atomically<T>(
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PlayerKind {
+    FileArgument,
+    PowerShellSoundPlayer,
+}
+
+#[derive(Clone, Copy)]
+struct BuiltinPlayer {
+    program: &'static str,
+    args: &'static [&'static str],
+    kind: PlayerKind,
+}
+
+impl BuiltinPlayer {
+    const fn new(program: &'static str, args: &'static [&'static str]) -> Self {
+        Self {
+            program,
+            args,
+            kind: PlayerKind::FileArgument,
+        }
+    }
+}
+
+const FFPLAY: BuiltinPlayer =
+    BuiltinPlayer::new("ffplay", &["-nodisp", "-autoexit", "-loglevel", "error"]);
+const MPV: BuiltinPlayer = BuiltinPlayer::new("mpv", &["--no-video", "--really-quiet"]);
+const VLC: BuiltinPlayer =
+    BuiltinPlayer::new("vlc", &["--intf", "dummy", "--play-and-exit", "--no-video"]);
+#[cfg(windows)]
+const POWERSHELL: BuiltinPlayer = BuiltinPlayer {
+    program: "powershell.exe",
+    args: &[],
+    kind: PlayerKind::PowerShellSoundPlayer,
+};
+
+#[cfg(target_os = "linux")]
+const BUILTIN_PLAYERS: &[BuiltinPlayer] = &[
+    BuiltinPlayer::new("pw-play", &[]),
+    BuiltinPlayer::new("paplay", &[]),
+    BuiltinPlayer::new("aplay", &["-q"]),
+    FFPLAY,
+    MPV,
+    VLC,
+    BuiltinPlayer::new("play", &["-q"]),
+];
+
+#[cfg(target_os = "macos")]
+const BUILTIN_PLAYERS: &[BuiltinPlayer] = &[BuiltinPlayer::new("afplay", &[]), FFPLAY, MPV, VLC];
+
+#[cfg(windows)]
+const BUILTIN_PLAYERS: &[BuiltinPlayer] = &[FFPLAY, MPV, VLC, POWERSHELL];
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+const BUILTIN_PLAYERS: &[BuiltinPlayer] = &[FFPLAY, MPV, VLC];
+
+const POWERSHELL_PLAY_SCRIPT: &str = "$p = $env:OCAF_PLAY_FILE; \
+if ([string]::IsNullOrEmpty($p)) { exit 2 }; \
+(New-Object System.Media.SoundPlayer -ArgumentList $p).PlaySync()";
+
+struct SelectedPlayer {
+    program: PathBuf,
+    args: &'static [&'static str],
+    name: String,
+    kind: PlayerKind,
+}
+
+impl SelectedPlayer {
+    fn run(&self, wav: &Path) -> CmdResult<()> {
+        let mut command = Command::new(&self.program);
+        command.args(self.args.iter().copied());
+        if self.kind == PlayerKind::PowerShellSoundPlayer {
+            command.args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                POWERSHELL_PLAY_SCRIPT,
+            ]);
+            command.env("OCAF_PLAY_FILE", wav);
+        } else {
+            command.arg(wav);
+        }
+        let status = command
+            .status()
+            .map_err(|e| format!("cannot run player {}: {e}", self.program.display()))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("{} exited with {status}", self.name))
+        }
+    }
+}
+
+fn resolve_player(requested: Option<&Path>, is_float: bool) -> CmdResult<SelectedPlayer> {
+    if let Some(requested) = requested {
+        let program = find_requested_player(requested)
+            .ok_or_else(|| format!("player {} was not found", requested.display()))?;
+        return Ok(SelectedPlayer {
+            program,
+            args: &[],
+            name: requested.display().to_string(),
+            kind: PlayerKind::FileArgument,
+        });
+    }
+
+    let mut powershell_installed = false;
+    for candidate in BUILTIN_PLAYERS {
+        let Some(program) = find_program(candidate.program) else {
+            continue;
+        };
+        if candidate.kind == PlayerKind::PowerShellSoundPlayer {
+            powershell_installed = true;
+            if is_float {
+                continue;
+            }
+        }
+        return Ok(SelectedPlayer {
+            program,
+            args: candidate.args,
+            name: candidate.program.to_string(),
+            kind: candidate.kind,
+        });
+    }
+    Err(missing_player_error(is_float, powershell_installed))
+}
+
+#[cfg(target_os = "windows")]
+fn missing_player_error(is_float: bool, powershell_installed: bool) -> String {
+    if is_float && powershell_installed {
+        "the built-in PowerShell WAV player does not support floating-point audio; \
+install ffplay, mpv or vlc, or pass --player PATH"
+            .to_string()
+    } else {
+        "no audio player found; install ffplay, mpv or vlc, or pass --player PATH".to_string()
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn missing_player_error(_is_float: bool, _powershell_installed: bool) -> String {
+    "no audio player found; install pw-play, paplay, aplay, ffplay, mpv or vlc, \
+or pass --player PATH"
+        .to_string()
+}
+
+fn find_requested_player(path: &Path) -> Option<PathBuf> {
+    if path.components().count() > 1 {
+        find_direct(path)
+    } else if executable_file(path) {
+        Some(path.to_path_buf())
+    } else {
+        find_program(&path.to_string_lossy())
+    }
+}
+
+fn find_program(program: &str) -> Option<PathBuf> {
+    let direct = Path::new(program);
+    if direct.components().count() > 1 {
+        return find_direct(direct);
+    }
+    let paths = env::var_os("PATH")?;
+    env::split_paths(&paths).find_map(|directory| find_in_dir(&directory, program))
+}
+
+#[cfg(not(windows))]
+fn find_direct(path: &Path) -> Option<PathBuf> {
+    executable_file(path).then(|| path.to_path_buf())
+}
+
+#[cfg(windows)]
+fn find_direct(path: &Path) -> Option<PathBuf> {
+    windows_candidates(path)
+        .into_iter()
+        .find(|candidate| executable_file(candidate))
+}
+
+#[cfg(not(windows))]
+fn find_in_dir(directory: &Path, program: &str) -> Option<PathBuf> {
+    let candidate = directory.join(program);
+    executable_file(&candidate).then_some(candidate)
+}
+
+#[cfg(windows)]
+fn find_in_dir(directory: &Path, program: &str) -> Option<PathBuf> {
+    windows_candidates(&directory.join(program))
+        .into_iter()
+        .find(|candidate| executable_file(candidate))
+}
+
+#[cfg(windows)]
+fn windows_candidates(path: &Path) -> Vec<PathBuf> {
+    let mut candidates = vec![path.to_path_buf()];
+    if path.extension().is_none() {
+        let extensions = env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string());
+        for extension in extensions.split(';') {
+            let extension = extension.trim();
+            if !extension.is_empty() {
+                candidates.push(path.with_extension(extension.trim_start_matches('.')));
+            }
+        }
+    }
+    candidates
+}
+
+fn executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
 fn unique_suffix() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -737,8 +1046,42 @@ fn wav_pcm_equal(original: &Path, decoded: &Path) -> CmdResult<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::output_parent;
+    use super::{find_program, output_parent, parse_play_args};
+    use std::ffi::OsString;
     use std::path::Path;
+
+    fn os_args(values: &[&str]) -> Vec<OsString> {
+        values.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn play_parses_a_player_override() {
+        let parsed =
+            parse_play_args(&os_args(&["audio.ocaf", "--player", "/opt/audio/player"])).unwrap();
+        assert_eq!(parsed.input, Path::new("audio.ocaf"));
+        assert_eq!(
+            parsed.player.as_deref(),
+            Some(Path::new("/opt/audio/player"))
+        );
+    }
+
+    #[test]
+    fn play_requires_exactly_one_input() {
+        assert!(parse_play_args(&os_args(&[])).is_err());
+        assert!(parse_play_args(&os_args(&["one.ocaf", "two.ocaf"])).is_err());
+    }
+
+    #[test]
+    fn play_rejects_unknown_options() {
+        assert!(parse_play_args(&os_args(&["audio.ocaf", "--visualizer"])).is_err());
+    }
+
+    #[test]
+    fn player_lookup_accepts_an_absolute_executable() {
+        let executable = std::env::current_exe().unwrap();
+        let path = executable.to_str().unwrap();
+        assert_eq!(find_program(path), Some(executable));
+    }
 
     #[test]
     fn relative_outputs_use_the_current_directory() {

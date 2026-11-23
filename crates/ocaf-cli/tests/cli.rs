@@ -73,3 +73,141 @@ fn relative_output_paths_use_the_current_directory() {
 
     fs::remove_dir_all(&dir).ok();
 }
+
+#[cfg(unix)]
+#[test]
+fn play_uses_the_explicit_player_and_removes_the_temp_file() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = scratch_dir("play-explicit");
+    let wav_path = dir.join("input.wav");
+    let original_pcm = write_test_wav(&wav_path);
+    let ocaf_path = dir.join("audio.ocaf");
+    let status = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .arg("encode")
+        .arg(&wav_path)
+        .arg(&ocaf_path)
+        .status()
+        .unwrap();
+    assert!(status.success(), "encode failed");
+
+    let capture = dir.join("captured.wav");
+    let player = dir.join("fake-player.sh");
+    fs::write(&player, "#!/bin/sh\ncp \"$1\" \"$OCAF_TEST_CAPTURE\"\n").unwrap();
+    let mut permissions = fs::metadata(&player).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&player, permissions).unwrap();
+
+    let temp = dir.join("tmp");
+    fs::create_dir(&temp).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .arg("play")
+        .arg(&ocaf_path)
+        .arg("--player")
+        .arg(&player)
+        .env("TMPDIR", &temp)
+        .env("OCAF_TEST_CAPTURE", &capture)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "play failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Playing"));
+    assert!(stdout.contains("Finished"));
+
+    let mut reader = WavReader::open(File::open(&capture).unwrap()).unwrap();
+    let mut decoded_pcm = Vec::new();
+    reader.read_frames(4_800, &mut decoded_pcm).unwrap();
+    assert_eq!(decoded_pcm, original_pcm);
+
+    let leftovers: Vec<_> = fs::read_dir(&temp).unwrap().collect();
+    assert!(
+        leftovers.is_empty(),
+        "temporary directory was not cleaned up: {leftovers:?}"
+    );
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[cfg(unix)]
+#[test]
+fn play_auto_detects_a_player_on_path() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = scratch_dir("play-auto");
+    let wav_path = dir.join("input.wav");
+    let original_pcm = write_test_wav(&wav_path);
+    let ocaf_path = dir.join("audio.ocaf");
+    let status = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .arg("encode")
+        .arg(&wav_path)
+        .arg(&ocaf_path)
+        .status()
+        .unwrap();
+    assert!(status.success(), "encode failed");
+
+    let bin = dir.join("bin");
+    fs::create_dir(&bin).unwrap();
+    let capture = dir.join("captured.wav");
+    let player = bin.join("pw-play");
+    fs::write(&player, "#!/bin/sh\ncp \"$1\" \"$OCAF_TEST_CAPTURE\"\n").unwrap();
+    let mut permissions = fs::metadata(&player).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&player, permissions).unwrap();
+
+    let temp = dir.join("tmp");
+    fs::create_dir(&temp).unwrap();
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .arg("play")
+        .arg(&ocaf_path)
+        .env("PATH", path)
+        .env("TMPDIR", &temp)
+        .env("OCAF_TEST_CAPTURE", &capture)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "play failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Player:  pw-play"));
+
+    let mut reader = WavReader::open(File::open(&capture).unwrap()).unwrap();
+    let mut decoded_pcm = Vec::new();
+    reader.read_frames(4_800, &mut decoded_pcm).unwrap();
+    assert_eq!(decoded_pcm, original_pcm);
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[cfg(unix)]
+#[test]
+fn play_reports_when_no_player_is_available() {
+    let dir = scratch_dir("play-missing");
+    let wav_path = dir.join("input.wav");
+    write_test_wav(&wav_path);
+    let ocaf_path = dir.join("audio.ocaf");
+    let status = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .arg("encode")
+        .arg(&wav_path)
+        .arg(&ocaf_path)
+        .status()
+        .unwrap();
+    assert!(status.success(), "encode failed");
+
+    let empty = dir.join("empty");
+    fs::create_dir(&empty).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .arg("play")
+        .arg(&ocaf_path)
+        .env("PATH", &empty)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("no audio player found"), "{stderr}");
+    assert!(stderr.contains("--player"), "{stderr}");
+    fs::remove_dir_all(&dir).ok();
+}
