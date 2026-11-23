@@ -2,7 +2,26 @@
 
 All notable changes to OCAF are documented here. The format version and the
 implementation version are separate: this release implements OCAF format 1.0
-with the `ocaf` 0.1.1 reference implementation.
+with the `ocaf` 0.2.0 reference implementation.
+
+## [0.2.0] - 2026-11-23
+
+### Added
+
+- `ocaf play <file.ocaf>` decodes the stream to a temporary WAV file, plays it
+  through an installed system player, and removes the temporary file when
+  playback ends. Every checksum is verified before playback starts.
+- Player auto-detection for `pw-play`, `paplay`, `aplay`, `ffplay`, `mpv`,
+  `vlc` and SoX `play` on Linux; `afplay`, `ffplay`, `mpv` and `vlc` on macOS;
+  and `ffplay`, `mpv`, `vlc` or the PowerShell WAV player on Windows.
+- `--player PATH` selects a specific player executable.
+- CLI integration tests for explicit-player playback, PATH auto-detection,
+  temporary-file cleanup, bit-exact playback data and the missing-player
+  error.
+
+The codec, bitstream format and compression behavior are unchanged from
+0.1.0. The benchmark measurements in `BENCHMARKS.md` were taken with 0.1.0 and
+remain representative.
 
 ## [0.1.1] - 2026-11-22
 

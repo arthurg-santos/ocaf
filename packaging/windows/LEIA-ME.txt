@@ -1,4 +1,4 @@
-OCAF 0.1.1 — Windows x86_64
+OCAF 0.2.0 — Windows x86_64
 ================================
 
 OCAF (Onood's Compressed Audio File) é um codec de áudio lossless.
@@ -34,6 +34,7 @@ Abra o Prompt de Comando ou PowerShell na pasta deste arquivo:
   ocaf.exe info musica.ocaf
   ocaf.exe verify musica.ocaf
   ocaf.exe decode musica.ocaf restaurada.wav
+  ocaf.exe play musica.ocaf
 
 Se o caminho tiver espaços, use aspas:
 
@@ -47,6 +48,8 @@ Comandos úteis
 --------------
   ocaf.exe encode entrada.wav saida.ocaf
   ocaf.exe decode saida.ocaf restaurada.wav
+  ocaf.exe play saida.ocaf
+  ocaf.exe play saida.ocaf --player "C:\Program Files\mpv\mpv.exe"
   ocaf.exe info saida.ocaf
   ocaf.exe verify saida.ocaf
   ocaf.exe compare entrada.wav saida.ocaf
@@ -61,7 +64,10 @@ Observações
   - O codificador é single-thread e ainda é mais lento que codecs maduros.
   - Float64 de mantissa completa é o caso de pior compressão, mas continua
     bit-exato.
-  - Esta é uma versão de teste 0.1.1, sem auditoria de segurança.
+  - O comando play usa ffplay, mpv ou vlc se estiverem instalados; caso
+    contrário usa o player do PowerShell, que só toca WAV PCM inteiro.
+  - O play decodifica e verifica o arquivo inteiro antes de começar o som.
+  - Esta é uma versão de teste 0.2.0, sem auditoria de segurança.
 
 Ao reportar um problema, envie:
   - a saída de `ocaf.exe --version`;

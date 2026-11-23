@@ -11,10 +11,10 @@ This repository contains the reference implementation:
 
 - `ocaf-core` — container, codec, checksums and WAV import/export (no external
   dependencies).
-- `ocaf` — command-line encoder, decoder, inspector, verifier and benchmark
-  tool.
+- `ocaf` — command-line encoder, decoder, player, inspector, verifier and
+  benchmark tool.
 
-**Status:** format 1.0, reference implementation 0.1.1, open source under the
+**Status:** format 1.0, reference implementation 0.2.0, open source under the
 MIT license. The codec is real, tested and bit-exact, but it has not been
 security-reviewed for untrusted media and is not yet a drop-in replacement for
 a mature codec such as FLAC.
@@ -40,7 +40,7 @@ a mature codec such as FLAC.
   CRC-32, and a whole-stream PCM CRC-32.
 - **Portable and small.** No external crates, no unsafe code, no SIMD or
   platform-specific tricks. The workspace builds with Rust 1.75 or newer.
-- **Full CLI and test suite.** Encode, decode, info, verify, compare and
+- **Full CLI and test suite.** Encode, decode, play, info, verify, compare and
   benchmark commands; deterministic corpus generator; property tests over
   random formats, rates, channels, block sizes and content; corruption and
   version-compatibility tests.
@@ -85,7 +85,7 @@ cargo build --release
 .\target\release\ocaf.exe --version
 ```
 
-A portable `ocaf-0.1.1-windows-x86_64.zip` can be produced from Linux with
+A portable `ocaf-0.2.0-windows-x86_64.zip` can be produced from Linux with
 `./scripts/build-windows.sh`, or downloaded from the Windows GitHub Actions
 workflow. The zip can also be sent directly to testers. The archive contains
 `ocaf.exe`, a Portuguese quick-start (`LEIA-ME.txt`), the MIT license, a
@@ -103,6 +103,12 @@ ocaf encode music.wav music.ocaf \
 # Decode and verify the bitstream
 ocaf decode music.ocaf restored.wav
 ocaf verify music.ocaf
+
+# Play through an installed system audio player
+ocaf play music.ocaf
+
+# Force a specific player executable
+ocaf play music.ocaf --player /usr/bin/ffplay
 
 # Inspect without decoding the audio
 ocaf info music.ocaf
@@ -129,6 +135,14 @@ The `encode` and `decode` commands write through a temporary file and rename
 atomically, so an interrupted run does not leave a half-written output behind.
 Errors are reported with a non-zero exit code and a specific reason (invalid
 WAV, corrupt CRC, unsupported version, bad argument, etc.).
+
+`play` decodes and verifies the whole stream into a temporary WAV file, then
+hands that file to an installed player and removes it when playback ends.
+Auto-detection tries `pw-play`, `paplay`, `aplay`, `ffplay`, `mpv`, `vlc` and
+SoX `play` on Linux, `afplay` on macOS, and `ffplay`, `mpv`, `vlc` or the
+PowerShell WAV player on Windows. Use `--player PATH` to choose another
+executable. The Windows PowerShell fallback handles integer PCM only; install
+`ffplay`, `mpv` or `vlc` for float WAV playback.
 
 ## Library
 
@@ -281,6 +295,9 @@ they are deterministic and independent.
   decoding an arbitrary position requires decoding from the start.
 - WAV input and output require seekable files; there is no stdin/stdout pipe
   mode.
+- `play` is not a streaming player: it decodes and verifies the entire file to
+  a temporary WAV before playback starts, and it requires a system audio
+  player.
 - Float64 audio is the worst compression case; it is bit-exact but may save
   only a few percent on full-mantissa material.
 - Tags are limited to textual `INFO` key/value pairs. Cover art, ReplayGain

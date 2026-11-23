@@ -45,7 +45,7 @@ The script builds `ocaf.exe`, creates a portable zip in `dist/`, and writes a
 SHA-256 checksum. The current archive is:
 
 ```text
-dist/ocaf-0.1.1-windows-x86_64.zip
+dist/ocaf-0.2.0-windows-x86_64.zip
 ```
 
 ## Test on Linux with Wine
@@ -97,12 +97,24 @@ Get-FileHash .\ocaf.exe -Algorithm SHA256
 
 Compare the result with `SHA256SUMS.txt`.
 
+## Playing audio
+
+`ocaf.exe play musica.ocaf` decodes the file and hands it to an installed
+player. OCAF tries `ffplay`, `mpv` and `vlc` first, then falls back to the
+PowerShell `SoundPlayer`. The PowerShell fallback supports integer PCM WAV but
+not floating-point WAV; install `ffplay`, `mpv` or `vlc` to play float files.
+Use `--player PATH` to select a different executable.
+
+Playback starts only after the whole stream has been decoded and verified, so
+there is a delay before sound starts on long files.
+
 ## Limits
 
 - The prebuilt archive is `x86_64` only. It does not run on 32-bit Windows.
 - OCAF accepts WAV input, not MP3/AAC/FLAC directly. Convert those to WAV
   first if needed.
 - Decoding regenerates a canonical WAV header; the PCM audio is bit-exact.
+- `play` needs an installed system player and is not a streaming player.
 - The binary is portable but unsigned. There is no MSI installer or
   auto-updater.
 

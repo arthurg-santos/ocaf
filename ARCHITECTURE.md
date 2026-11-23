@@ -18,7 +18,7 @@ they are, and where the current limits are. The byte-level contract is in
 - Competitive compression on tonal, high-resolution and multichannel audio,
   and acceptable behavior on noise.
 
-**Non-goals (for version 0.1.1)**
+**Non-goals (for version 0.2.0)**
 
 - Beating FLAC/WavPack on every possible signal.
 - Low-latency live streaming. The current encoder works on whole frames and
@@ -51,7 +51,7 @@ ocaf-core
 
 ocaf-cli
 ├── main.rs       argument parsing, help, version, exit codes
-├── commands.rs   encode/decode/info/verify/compare/benchmark
+├── commands.rs   encode/decode/play/info/verify/compare/benchmark
 └── format.rs     human-readable bytes, duration, ratios, throughput
 ```
 
