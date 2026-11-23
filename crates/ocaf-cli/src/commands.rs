@@ -965,22 +965,19 @@ fn windows_candidates(path: &Path) -> Vec<PathBuf> {
     candidates
 }
 
+#[cfg(unix)]
 fn executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
     let Ok(metadata) = fs::metadata(path) else {
         return false;
     };
-    if !metadata.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        true
-    }
+    metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn executable_file(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|metadata| metadata.is_file())
 }
 
 fn unique_suffix() -> u128 {
