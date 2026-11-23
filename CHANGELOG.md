@@ -18,6 +18,9 @@ with the `ocaf` 0.2.0 reference implementation.
 - CLI integration tests for explicit-player playback, PATH auto-detection,
   temporary-file cleanup, bit-exact playback data and the missing-player
   error.
+- A tag-triggered release workflow that verifies the version, runs the full
+  test suite, builds Linux and Windows archives and publishes the GitHub
+  Release with SHA-256 checksums.
 
 The codec, bitstream format and compression behavior are unchanged from
 0.1.0. The benchmark measurements in `BENCHMARKS.md` were taken with 0.1.0 and

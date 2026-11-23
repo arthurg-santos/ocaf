@@ -109,6 +109,26 @@ New subframe types must be rejected cleanly by older decoders, never guessed.
   exact commands and, for compression changes, before/after sizes on the
   standard corpus.
 
+## Releases
+
+Every user-visible version gets a Git tag and a GitHub Release.
+
+1. Update the workspace version in `Cargo.toml` and `CHANGELOG.md`.
+2. Run the full format, Clippy and test suite.
+3. Commit the version bump and push `main`.
+4. Create an annotated tag and push it:
+
+   ```sh
+   git tag -a v0.2.0 -m "OCAF 0.2.0"
+   git push origin v0.2.0
+   ```
+
+The `Release` workflow runs on every `v*` tag. It verifies that the tag matches
+`Cargo.toml`, runs all checks, builds the Linux binary and the portable Windows
+archive, writes a SHA-256 checksum file and publishes the GitHub Release with
+those assets. Do not create a release from an untagged commit, and do not reuse
+a version tag for different code.
+
 ## Reporting bugs
 
 Please include:
