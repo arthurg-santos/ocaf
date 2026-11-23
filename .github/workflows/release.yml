@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install cross-compilation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64 zip
+          rustup target add x86_64-pc-windows-gnu
+
+      - name: Check version and tag
+        run: |
+          version=$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml | head -n1)
+          if [ -z "$version" ]; then
+            echo "error: could not read the workspace version from Cargo.toml" >&2
+            exit 1
+          fi
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "error: tag $GITHUB_REF_NAME does not match Cargo.toml version $version" >&2
+            exit 1
+          fi
+          echo "Releasing OCAF $version"
+
+      - name: Run checks
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace -- --test-threads=1
+
+      - name: Build Linux binary
+        run: cargo build --release
+
+      - name: Build Windows package
+        run: ./scripts/build-windows.sh
+
+      - name: Package Linux archive
+        run: |
+          version=$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml | head -n1)
+          mkdir -p dist/linux
+          cp target/release/ocaf dist/linux/ocaf
+          cp LICENSE README.md dist/linux/
+          tar -C dist/linux -czf "dist/ocaf-$version-linux-x86_64.tar.gz" ocaf LICENSE README.md
+          rm -rf dist/linux
+          (
+            cd dist
+            sha256sum \
+              "ocaf-$version-windows-x86_64.zip" \
+              "ocaf-$version-linux-x86_64.tar.gz" > SHA256SUMS.txt
+          )
+          ls -lh dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml | head -n1)
+          assets=(
+            "dist/ocaf-$version-windows-x86_64.zip"
+            "dist/ocaf-$version-linux-x86_64.tar.gz"
+            "dist/SHA256SUMS.txt"
+          )
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --title "OCAF $version" \
+              --generate-notes \
+              --verify-tag
+          fi
