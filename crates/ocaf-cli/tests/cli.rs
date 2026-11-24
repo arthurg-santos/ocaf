@@ -2,7 +2,7 @@ use ocaf_core::wav::{WavReader, WavWriter};
 use ocaf_core::{Metadata, SampleFormat, StreamInfo};
 use std::fs::{self, File};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn scratch_dir(label: &str) -> PathBuf {
@@ -71,6 +71,249 @@ fn relative_output_paths_use_the_current_directory() {
     reader.read_frames(4_800, &mut decoded_pcm).unwrap();
     assert_eq!(decoded_pcm, original_pcm);
 
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn help_keeps_option_indentation() {
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .args(["help", "encode"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("\n  --pcm-format FORMAT"), "{stdout}");
+    assert!(stdout.contains("\n  --block-size N"), "{stdout}");
+}
+
+fn ffmpeg_available() -> bool {
+    ["ffmpeg", "ffprobe"].iter().all(|program| {
+        Command::new(program)
+            .arg("-version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    })
+}
+
+fn run_ffmpeg(directory: &std::path::Path, args: &[&str]) {
+    let status = Command::new("ffmpeg")
+        .arg("-v")
+        .arg("error")
+        .arg("-y")
+        .args(args)
+        .current_dir(directory)
+        .status()
+        .unwrap();
+    assert!(status.success(), "ffmpeg failed with arguments {args:?}");
+}
+
+fn read_all_pcm(path: &std::path::Path) -> Vec<u8> {
+    let mut reader = WavReader::open(File::open(path).unwrap()).unwrap();
+    let mut block = Vec::new();
+    let mut all = Vec::new();
+    loop {
+        let frames = reader.read_frames(65_536, &mut block).unwrap();
+        if frames == 0 {
+            break;
+        }
+        all.extend_from_slice(&block);
+    }
+    all
+}
+
+#[test]
+fn encode_decodes_flac_with_ffmpeg_bit_exactly() {
+    if !ffmpeg_available() {
+        eprintln!("skipping flac test: ffmpeg/ffprobe not available");
+        return;
+    }
+    let dir = scratch_dir("encode-flac");
+    let wav_path = dir.join("input.wav");
+    let original_pcm = write_test_wav(&wav_path);
+    run_ffmpeg(&dir, &["-i", "input.wav", "-c:a", "flac", "input.flac"]);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args(["encode", "input.flac", "output.ocaf"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "flac encode failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Source:  flac"), "{stdout}");
+    assert!(stdout.contains("16-bit integer PCM"), "{stdout}");
+
+    let info = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args(["info", "output.ocaf"])
+        .output()
+        .unwrap();
+    assert!(info.status.success());
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("SOURCE_CODEC = flac"),
+        "provenance metadata is missing"
+    );
+
+    let decode = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args(["decode", "output.ocaf", "decoded.wav"])
+        .output()
+        .unwrap();
+    assert!(
+        decode.status.success(),
+        "decode failed: {}",
+        String::from_utf8_lossy(&decode.stderr)
+    );
+    assert_eq!(read_all_pcm(&dir.join("decoded.wav")), original_pcm);
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn encode_decodes_mp3_to_float_bit_exactly() {
+    if !ffmpeg_available() {
+        eprintln!("skipping mp3 test: ffmpeg/ffprobe not available");
+        return;
+    }
+    let dir = scratch_dir("encode-mp3-float");
+    let wav_path = dir.join("input.wav");
+    write_test_wav(&wav_path);
+    run_ffmpeg(
+        &dir,
+        &[
+            "-i",
+            "input.wav",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "192k",
+            "input.mp3",
+        ],
+    );
+    run_ffmpeg(
+        &dir,
+        &["-i", "input.mp3", "-c:a", "pcm_f32le", "reference.wav"],
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args(["encode", "input.mp3", "output.ocaf"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "mp3 encode failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("32-bit IEEE float"), "{stdout}");
+    assert!(stdout.contains("preserved bit-exactly"), "{stdout}");
+
+    let decode = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args(["decode", "output.ocaf", "decoded.wav"])
+        .output()
+        .unwrap();
+    assert!(decode.status.success());
+    assert_eq!(
+        read_all_pcm(&dir.join("decoded.wav")),
+        read_all_pcm(&dir.join("reference.wav"))
+    );
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn encode_decodes_mp3_to_s16_when_requested() {
+    if !ffmpeg_available() {
+        eprintln!("skipping mp3 test: ffmpeg/ffprobe not available");
+        return;
+    }
+    let dir = scratch_dir("encode-mp3-s16");
+    let wav_path = dir.join("input.wav");
+    write_test_wav(&wav_path);
+    run_ffmpeg(
+        &dir,
+        &[
+            "-i",
+            "input.wav",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            "input.mp3",
+        ],
+    );
+    run_ffmpeg(
+        &dir,
+        &["-i", "input.mp3", "-c:a", "pcm_s16le", "reference.wav"],
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args(["encode", "input.mp3", "output.ocaf", "--pcm-format", "s16"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "mp3 encode failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("16-bit integer PCM"), "{stdout}");
+    assert!(stdout.contains("is lossy"), "{stdout}");
+
+    let decode = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args(["decode", "output.ocaf", "decoded.wav"])
+        .output()
+        .unwrap();
+    assert!(decode.status.success());
+    assert_eq!(
+        read_all_pcm(&dir.join("decoded.wav")),
+        read_all_pcm(&dir.join("reference.wav"))
+    );
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn pcm_format_is_rejected_for_native_wav() {
+    let dir = scratch_dir("encode-wav-pcm-format");
+    let wav_path = dir.join("input.wav");
+    write_test_wav(&wav_path);
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args(["encode", "input.wav", "output.ocaf", "--pcm-format", "s16"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("only applies to non-WAV"), "{stderr}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn encode_reports_a_missing_external_decoder() {
+    let dir = scratch_dir("encode-missing-ffmpeg");
+    fs::write(dir.join("input.mp3"), b"not really an mp3").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ocaf"))
+        .current_dir(&dir)
+        .args([
+            "encode",
+            "input.mp3",
+            "output.ocaf",
+            "--ffmpeg",
+            "/nonexistent/ffmpeg",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("ffmpeg executable"), "{stderr}");
+    assert!(stderr.contains("was not found"), "{stderr}");
     fs::remove_dir_all(&dir).ok();
 }
 

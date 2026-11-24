@@ -1,6 +1,7 @@
 //! Implementations of every `ocaf` subcommand.
 
 use crate::format::{bytes, channel_layout, duration, number, throughput};
+use crate::input::{PcmFormat, Source};
 use ocaf_core::wav::WavReader;
 use ocaf_core::{
     decode_to_wav, encode_wav, probe, verify, EncodeOptions, SampleFormat, StereoMode,
@@ -19,11 +20,15 @@ fn err<E: std::fmt::Display>(error: E) -> String {
     error.to_string()
 }
 
+#[derive(Debug)]
 struct EncodeArgs {
     input: PathBuf,
     output: PathBuf,
     options: EncodeOptions,
     force: bool,
+    pcm_format: Option<PcmFormat>,
+    ffmpeg: Option<PathBuf>,
+    ffprobe: Option<PathBuf>,
 }
 
 struct DecodeArgs {
@@ -45,12 +50,21 @@ struct PlayArgs {
 pub fn encode(args: &[OsString]) -> CmdResult<()> {
     let parsed = parse_encode_args(args)?;
     let started = Instant::now();
-    let options = parsed.options.clone();
+    let mut options = parsed.options.clone();
     options.validate().map_err(err)?;
+    let source = Source::detect(
+        &parsed.input,
+        parsed.pcm_format,
+        parsed.ffmpeg.as_deref(),
+        parsed.ffprobe.as_deref(),
+    )?;
+    if let Some(codec) = source.codec() {
+        if options.metadata.get("SOURCE_CODEC").is_none() {
+            options.metadata.set("SOURCE_CODEC", codec).map_err(err)?;
+        }
+    }
     let summary = write_atomically(&parsed.output, parsed.force, |file| {
-        let input = File::open(&parsed.input)
-            .map_err(|e| format!("cannot open {}: {e}", parsed.input.display()))?;
-        encode_wav(input, &mut *file, &options).map_err(err)
+        source.encode(&parsed.input, file, &options)
     })?;
     let elapsed = started.elapsed().as_secs_f64();
     println!(
@@ -58,6 +72,9 @@ pub fn encode(args: &[OsString]) -> CmdResult<()> {
         parsed.input.display(),
         parsed.output.display()
     );
+    if let Some(line) = source.source_line(&parsed.input) {
+        println!("  Source:  {line}");
+    }
     println!(
         "  Audio:   {} Hz, {}, {}-bit {}",
         summary.info.sample_rate,
@@ -86,6 +103,9 @@ pub fn encode(args: &[OsString]) -> CmdResult<()> {
         throughput(summary.pcm_bytes, elapsed),
         elapsed
     );
+    for note in source.notes() {
+        println!("  Note:    {note}");
+    }
     Ok(())
 }
 
@@ -419,6 +439,9 @@ fn parse_encode_args(args: &[OsString]) -> CmdResult<EncodeArgs> {
     let mut positionals = Vec::new();
     let mut options = EncodeOptions::default();
     let mut force = false;
+    let mut pcm_format = None;
+    let mut ffmpeg = None;
+    let mut ffprobe = None;
     let mut index = 0;
     while index < args.len() {
         let text = args[index].to_string_lossy().to_string();
@@ -427,6 +450,22 @@ fn parse_encode_args(args: &[OsString]) -> CmdResult<EncodeArgs> {
             "--force" => {
                 ensure_no_inline(&name, &inline)?;
                 force = true;
+            }
+            "--pcm-format" => {
+                let value = take_value(args, &mut index, &name, inline)?;
+                pcm_format = if value.eq_ignore_ascii_case("auto") {
+                    None
+                } else {
+                    Some(PcmFormat::parse(&value)?)
+                };
+            }
+            "--ffmpeg" => {
+                let value = take_value(args, &mut index, &name, inline)?;
+                ffmpeg = Some(PathBuf::from(value));
+            }
+            "--ffprobe" => {
+                let value = take_value(args, &mut index, &name, inline)?;
+                ffprobe = Some(PathBuf::from(value));
             }
             "--block-size" => {
                 let value = take_value(args, &mut index, &name, inline)?;
@@ -493,7 +532,7 @@ fn parse_encode_args(args: &[OsString]) -> CmdResult<EncodeArgs> {
         index += 1;
     }
     if positionals.len() != 2 {
-        return Err("encode expects INPUT.wav and OUTPUT.ocaf".to_string());
+        return Err("encode expects INPUT and OUTPUT.ocaf".to_string());
     }
     options.validate().map_err(err)?;
     let input = positionals.remove(0);
@@ -506,6 +545,9 @@ fn parse_encode_args(args: &[OsString]) -> CmdResult<EncodeArgs> {
         output,
         options,
         force,
+        pcm_format,
+        ffmpeg,
+        ffprobe,
     })
 }
 
@@ -665,7 +707,7 @@ fn take_value(
 }
 
 fn ratio_text(pcm_bytes: u64, ocaf_bytes: u64) -> String {
-    if ocaf_bytes == 0 {
+    if pcm_bytes == 0 || ocaf_bytes == 0 {
         return "-".to_string();
     }
     let ratio = pcm_bytes as f64 / ocaf_bytes as f64;
@@ -916,7 +958,7 @@ fn find_requested_player(path: &Path) -> Option<PathBuf> {
     }
 }
 
-fn find_program(program: &str) -> Option<PathBuf> {
+pub(crate) fn find_program(program: &str) -> Option<PathBuf> {
     let direct = Path::new(program);
     if direct.components().count() > 1 {
         return find_direct(direct);
@@ -1043,12 +1085,51 @@ fn wav_pcm_equal(original: &Path, decoded: &Path) -> CmdResult<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_program, output_parent, parse_play_args};
+    use super::{find_program, output_parent, parse_encode_args, parse_play_args, ratio_text};
+    use crate::input::PcmFormat;
     use std::ffi::OsString;
     use std::path::Path;
 
     fn os_args(values: &[&str]) -> Vec<OsString> {
         values.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn empty_stream_ratios_are_not_infinite() {
+        assert_eq!(ratio_text(0, 201), "-");
+        assert_eq!(ratio_text(0, 0), "-");
+    }
+
+    #[test]
+    fn encode_parses_external_decoder_options() {
+        let parsed = parse_encode_args(&os_args(&[
+            "audio.flac",
+            "audio.ocaf",
+            "--pcm-format",
+            "s16",
+            "--ffmpeg",
+            "/opt/ffmpeg",
+            "--ffprobe",
+            "/opt/ffprobe",
+        ]))
+        .unwrap();
+        assert_eq!(parsed.pcm_format, Some(PcmFormat::S16));
+        assert_eq!(parsed.ffmpeg.as_deref(), Some(Path::new("/opt/ffmpeg")));
+        assert_eq!(parsed.ffprobe.as_deref(), Some(Path::new("/opt/ffprobe")));
+    }
+
+    #[test]
+    fn encode_auto_pcm_format_clears_the_override() {
+        let parsed =
+            parse_encode_args(&os_args(&["audio.mp3", "audio.ocaf", "--pcm-format=auto"])).unwrap();
+        assert_eq!(parsed.pcm_format, None);
+    }
+
+    #[test]
+    fn encode_rejects_an_unknown_pcm_format() {
+        let error = parse_encode_args(&os_args(&["audio.mp3", "audio.ocaf", "--pcm-format", "u8"]))
+            .unwrap_err();
+        assert!(error.contains("unknown PCM format"), "{error}");
     }
 
     #[test]

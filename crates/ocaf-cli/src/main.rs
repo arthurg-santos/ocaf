@@ -2,6 +2,7 @@
 
 mod commands;
 mod format;
+mod input;
 
 use std::env;
 use std::ffi::OsString;
@@ -57,104 +58,118 @@ fn main() -> ExitCode {
 
 fn print_help() {
     println!(
-        "ocaf {VERSION} - Onood's Compressed Audio File (lossless audio codec)\n\
-\n\
-Usage:\n\
-  ocaf encode <input.wav> <output.ocaf> [options]   Encode a WAV file\n\
-  ocaf decode <input.ocaf> <output.wav> [options]   Decode to WAV\n\
-  ocaf play <file.ocaf> [--player PATH]              Play through a system player\n\
-  ocaf info <file.ocaf>                              Show container information\n\
-  ocaf verify <file.ocaf>                            Decode and verify all checksums\n\
-  ocaf compare <input.wav> <file.ocaf>               Compare sizes and formats\n\
-  ocaf benchmark <input.wav> [--iterations N]        Measure speed and compression\n\
-\n\
-Commands:\n\
-  encode      Encode uncompressed WAV (PCM 16/24/32, float 32/64) to OCAF\n\
-  decode      Decode OCAF to a bit-identical WAV file\n\
-  play        Decode to a temporary WAV and play it with a system player\n\
-  info        Read the header and metadata without decoding audio\n\
-  verify      Fully decode the stream and check frame and PCM checksums\n\
-  compare     Compare a WAV/OCAF pair\n\
-  benchmark   Run encode/decode benchmarks on a WAV file\n\
-\n\
-General options:\n\
-  -h, --help       Show help (use `ocaf help <command>` for details)\n\
-  -V, --version    Show version\n\
-\n\
-Examples:\n\
-  ocaf encode music.wav music.ocaf\n\
-  ocaf play music.ocaf\n\
-  ocaf decode music.ocaf restored.wav\n\
-  ocaf info music.ocaf\n\
-  ocaf verify music.ocaf\n\
-  ocaf benchmark music.wav --iterations 5\n"
+        concat!(
+        "ocaf {VERSION} - Onood's Compressed Audio File (lossless audio codec)\n",
+        "\n",
+        "Usage:\n",
+        "  ocaf encode <input> <output.ocaf> [options]        Encode audio to OCAF\n",
+        "  ocaf decode <input.ocaf> <output.wav> [options]   Decode to WAV\n",
+        "  ocaf play <file.ocaf> [--player PATH]              Play through a system player\n",
+        "  ocaf info <file.ocaf>                              Show container information\n",
+        "  ocaf verify <file.ocaf>                            Decode and verify all checksums\n",
+        "  ocaf compare <input.wav> <file.ocaf>               Compare sizes and formats\n",
+        "  ocaf benchmark <input.wav> [--iterations N]        Measure speed and compression\n",
+        "\n",
+        "Commands:\n",
+        "  encode      Encode WAV natively or other formats through FFmpeg\n",
+        "  decode      Decode OCAF to a bit-identical WAV file\n",
+        "  play        Decode to a temporary WAV and play it with a system player\n",
+        "  info        Read the header and metadata without decoding audio\n",
+        "  verify      Fully decode the stream and check frame and PCM checksums\n",
+        "  compare     Compare a WAV/OCAF pair\n",
+        "  benchmark   Run encode/decode benchmarks on a WAV file\n",
+        "\n",
+        "General options:\n",
+        "  -h, --help       Show help (use `ocaf help <command>` for details)\n",
+        "  -V, --version    Show version\n",
+        "\n",
+        "Examples:\n",
+        "  ocaf encode music.wav music.ocaf\n",
+        "  ocaf encode music.flac music.ocaf\n",
+        "  ocaf encode song.mp3 song.ocaf --pcm-format s16\n",
+        "  ocaf play music.ocaf\n",
+        "  ocaf decode music.ocaf restored.wav\n",
+        "  ocaf info music.ocaf\n",
+        "  ocaf verify music.ocaf\n",
+        "  ocaf benchmark music.wav --iterations 5\n",
+    ),
+        VERSION = VERSION
     );
 }
 
 fn print_command_help(command: &str) {
     match command {
-        "encode" => println!(
-            "Usage: ocaf encode <input.wav> <output.ocaf> [options]\n\
-\n\
-Options:\n\
-  --block-size N              Samples per frame (default 16384, 1..=65535)\n\
-  --max-lpc-order N           Maximum LPC order (default 12, 0..=32)\n\
-  --max-partition-order N     Maximum Rice partition order (default 6, 0..=8)\n\
-  --stereo MODE               auto, independent, left-side, right-side, mid-side\n\
-  --title TEXT                Set the TITLE metadata field\n\
-  --artist TEXT               Set the ARTIST metadata field\n\
-  --album TEXT                Set the ALBUM metadata field\n\
-  --date TEXT                 Set the DATE metadata field\n\
-  --genre TEXT                Set the GENRE metadata field\n\
-  --comment TEXT              Set the COMMENT metadata field\n\
-  --tracknumber TEXT          Set the TRACKNUMBER metadata field\n\
-  --meta KEY=VALUE            Set an arbitrary metadata field\n\
-  --force                     Overwrite an existing output file\n\
-  -h, --help                  Show this help\n"
-        ),
-        "decode" => println!(
-            "Usage: ocaf decode <input.ocaf> <output.wav> [--force]\n\
-\n\
-Decoding verifies every frame checksum and the whole-stream PCM checksum.\n\
-Metadata fields that WAV can represent are written into a LIST/INFO chunk.\n"
-        ),
-        "play" => println!(
-            "Usage: ocaf play <file.ocaf> [--player PATH]\n\
-\n\
-Decodes the whole stream to a temporary WAV file, verifies every checksum,\n\
-plays it through an installed system player and removes the temporary file.\n\
-Playback starts after decoding, so long files open with a delay.\n\
-\n\
-Options:\n\
-  --player PATH   Use this player executable instead of auto-detection\n\
-  -h, --help      Show this help\n\
-\n\
-Auto-detection tries pw-play, paplay, aplay, ffplay, mpv, vlc and SoX play\n\
-on Linux, afplay on macOS, and ffplay, mpv, vlc or PowerShell on Windows.\n"
-        ),
-        "info" => println!(
-            "Usage: ocaf info <file.ocaf>\n\
-\n\
-Reads the container header and metadata and validates their CRC-32 values.\n\
-Use `ocaf verify` to decode the whole stream.\n"
-        ),
-        "verify" => println!(
-            "Usage: ocaf verify <file.ocaf>\n\n\
-Fully decodes the file, validates every frame and PCM checksum, and exits\n\
-with a non-zero status if any corruption is found.\n"
-        ),
-        "compare" => println!(
-            "Usage: ocaf compare <input.wav> <file.ocaf>\n\
-\n\
-Reports file sizes, PCM size and compression ratio for a matching pair.\n"
-        ),
-        "benchmark" | "bench" => println!(
-            "Usage: ocaf benchmark <input.wav> [--iterations N]\n\
-\n\
-Runs the default encoder and decoder, reports real wall-clock throughput,\n\
-verifies all checksums and compares decoded PCM with the original WAV.\n\
-Timings include WAV/OCAF file I/O. Default iterations: 3 (1..=100).\n"
-        ),
+        "encode" => println!(concat!(
+            "Usage: ocaf encode <input> <output.ocaf> [options]\n",
+            "\n",
+            "WAV input is read natively. Other formats (FLAC, MP3, AAC/M4A, Ogg, Opus,\n",
+            "WMA, AIFF and anything else FFmpeg reads) are decoded with ffmpeg/ffprobe\n",
+            "from PATH. OCAF stores the decoded PCM, not the original bitstream. Lossy\n",
+            "sources default to 32-bit float; use --pcm-format s16 for a smaller file.\n",
+            "\n",
+            "Options:\n",
+            "  --pcm-format FORMAT         external input only: auto, s16, s24, s32, f32, f64\n",
+            "  --ffmpeg PATH               FFmpeg executable (default: found in PATH)\n",
+            "  --ffprobe PATH              FFprobe executable (default: sibling or PATH)\n",
+            "  --block-size N              Samples per frame (default 16384, 1..=65535)\n",
+            "  --max-lpc-order N           Maximum LPC order (default 12, 0..=32)\n",
+            "  --max-partition-order N     Maximum Rice partition order (default 6, 0..=8)\n",
+            "  --stereo MODE               auto, independent, left-side, right-side, mid-side\n",
+            "  --title TEXT                Set the TITLE metadata field\n",
+            "  --artist TEXT               Set the ARTIST metadata field\n",
+            "  --album TEXT                Set the ALBUM metadata field\n",
+            "  --date TEXT                 Set the DATE metadata field\n",
+            "  --genre TEXT                Set the GENRE metadata field\n",
+            "  --comment TEXT              Set the COMMENT metadata field\n",
+            "  --tracknumber TEXT          Set the TRACKNUMBER metadata field\n",
+            "  --meta KEY=VALUE            Set an arbitrary metadata field\n",
+            "  --force                     Overwrite an existing output file\n",
+            "  -h, --help                  Show this help\n",
+        )),
+        "decode" => println!(concat!(
+            "Usage: ocaf decode <input.ocaf> <output.wav> [--force]\n",
+            "\n",
+            "Decoding verifies every frame checksum and the whole-stream PCM checksum.\n",
+            "Metadata fields that WAV can represent are written into a LIST/INFO chunk.\n",
+        )),
+        "play" => println!(concat!(
+            "Usage: ocaf play <file.ocaf> [--player PATH]\n",
+            "\n",
+            "Decodes the whole stream to a temporary WAV file, verifies every checksum,\n",
+            "plays it through an installed system player and removes the temporary file.\n",
+            "Playback starts after decoding, so long files open with a delay.\n",
+            "\n",
+            "Options:\n",
+            "  --player PATH   Use this player executable instead of auto-detection\n",
+            "  -h, --help      Show this help\n",
+            "\n",
+            "Auto-detection tries pw-play, paplay, aplay, ffplay, mpv, vlc and SoX play\n",
+            "on Linux, afplay on macOS, and ffplay, mpv, vlc or PowerShell on Windows.\n",
+        )),
+        "info" => println!(concat!(
+            "Usage: ocaf info <file.ocaf>\n",
+            "\n",
+            "Reads the container header and metadata and validates their CRC-32 values.\n",
+            "Use `ocaf verify` to decode the whole stream.\n",
+        )),
+        "verify" => println!(concat!(
+            "Usage: ocaf verify <file.ocaf>\n",
+            "\n",
+            "Fully decodes the file, validates every frame and PCM checksum, and exits\n",
+            "with a non-zero status if any corruption is found.\n",
+        )),
+        "compare" => println!(concat!(
+            "Usage: ocaf compare <input.wav> <file.ocaf>\n",
+            "\n",
+            "Reports file sizes, PCM size and compression ratio for a matching pair.\n",
+        )),
+        "benchmark" | "bench" => println!(concat!(
+            "Usage: ocaf benchmark <input.wav> [--iterations N]\n",
+            "\n",
+            "Runs the default encoder and decoder, reports real wall-clock throughput,\n",
+            "verifies all checksums and compares decoded PCM with the original WAV.\n",
+            "Timings include WAV/OCAF file I/O. Default iterations: 3 (1..=100).\n",
+        )),
         _ => {
             eprintln!("ocaf: error: no help available for {command:?}");
             print_help();
