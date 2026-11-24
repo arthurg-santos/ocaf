@@ -2,7 +2,7 @@
 
 use ocaf_core::crc32::crc32;
 use ocaf_core::decoder::{decode_to_wav, probe, verify};
-use ocaf_core::encoder::{encode_wav, EncodeOptions};
+use ocaf_core::encoder::{encode_pcm, encode_wav, EncodeOptions};
 use ocaf_core::format::{SampleFormat, StreamInfo};
 use ocaf_core::metadata::Metadata;
 use ocaf_core::pcm;
@@ -394,6 +394,71 @@ fn version_compatibility() {
     let crc = crc32(&future_major[..124]);
     future_major[124..128].copy_from_slice(&crc.to_le_bytes());
     assert!(verify(Cursor::new(future_major)).is_err());
+}
+
+#[test]
+fn raw_pcm_encoder_discovers_the_sample_count() {
+    let frames = 10_000;
+    let spec = info(44_100, 2, 16, SampleFormat::Int, 0);
+    let planar = signal(3, frames, 2, 16, 0x1234);
+    let mut raw = Vec::new();
+    pcm::interleaved_from_planar(&spec, &planar, frames, &mut raw).unwrap();
+
+    let mut output = Cursor::new(Vec::new());
+    let summary = encode_pcm(
+        Cursor::new(raw.clone()),
+        spec,
+        &mut output,
+        &EncodeOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(summary.info.total_samples, frames as u64);
+    assert_eq!(summary.pcm_bytes, raw.len() as u64);
+
+    let ocaf = output.into_inner();
+    let report = verify(Cursor::new(ocaf.clone())).unwrap();
+    assert_eq!(report.info.total_samples, frames as u64);
+    assert_eq!(report.pcm_bytes, raw.len() as u64);
+
+    let decoded_wav = decode(&ocaf);
+    let (decoded_spec, decoded_pcm) = canonical_pcm(&decoded_wav);
+    assert_eq!(decoded_spec.total_samples, frames as u64);
+    assert_eq!(decoded_pcm, raw);
+}
+
+#[test]
+fn raw_pcm_encoder_accepts_an_empty_stream() {
+    let spec = info(48_000, 1, 24, SampleFormat::Int, 0);
+    let mut output = Cursor::new(Vec::new());
+    let summary = encode_pcm(
+        Cursor::new(Vec::new()),
+        spec,
+        &mut output,
+        &EncodeOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(summary.info.total_samples, 0);
+    assert_eq!(summary.frame_count, 0);
+    assert_eq!(summary.pcm_bytes, 0);
+    let report = verify(Cursor::new(output.into_inner())).unwrap();
+    assert_eq!(report.info.total_samples, 0);
+}
+
+#[test]
+fn raw_pcm_encoder_rejects_a_partial_frame() {
+    let spec = info(48_000, 2, 16, SampleFormat::Int, 0);
+    let mut output = Cursor::new(Vec::new());
+    let error = encode_pcm(
+        Cursor::new(vec![0u8; 7]),
+        spec,
+        &mut output,
+        &EncodeOptions::default(),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(error, ocaf_core::Error::InvalidPcm(_)),
+        "unexpected error: {error}"
+    );
 }
 
 #[test]

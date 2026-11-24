@@ -40,7 +40,7 @@ pub mod subframe;
 pub mod wav;
 
 pub use decoder::{decode_to_wav, probe, verify, DecodeSummary, Decoder, ProbeInfo, VerifyReport};
-pub use encoder::{encode_wav, EncodeOptions, EncodeSummary, StereoMode};
+pub use encoder::{encode_pcm, encode_wav, EncodeOptions, EncodeSummary, StereoMode};
 pub use error::{Error, Result};
 pub use format::{ChannelAssignment, SampleFormat, StreamHeader, StreamInfo};
 pub use metadata::{Metadata, MetadataEntry};

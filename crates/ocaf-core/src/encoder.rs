@@ -111,15 +111,61 @@ impl EncodeSummary {
 /// Encode a WAV stream into an OCAF stream.
 pub fn encode_wav<R: Read + Seek, W: Write + Seek>(
     input: R,
+    output: W,
+    options: &EncodeOptions,
+) -> Result<EncodeSummary> {
+    let mut wav = WavReader::open(input)?;
+    let wav_info = wav.info().clone();
+    encode_stream(
+        &mut wav,
+        wav_info.spec,
+        Some(wav_info.spec.total_samples),
+        &wav_info.metadata,
+        output,
+        options,
+    )
+}
+
+/// Encode raw canonical interleaved PCM into an OCAF stream.
+///
+/// `info` describes the sample rate, channel layout, bit depth and sample
+/// format. Its `total_samples` field is ignored: the input ends at EOF and
+/// the final sample count is written into the OCAF header. The input must be
+/// little-endian interleaved PCM in WAV byte order and must contain complete
+/// sample frames.
+pub fn encode_pcm<R: Read, W: Write + Seek>(
+    input: R,
+    info: StreamInfo,
+    output: W,
+    options: &EncodeOptions,
+) -> Result<EncodeSummary> {
+    info.validate()?;
+    let block_align = info.block_align();
+    if block_align == 0 {
+        return Err(Error::argument("PCM layout has a zero block alignment"));
+    }
+    let mut source = RawPcmSource {
+        reader: input,
+        block_align,
+    };
+    let spec = StreamInfo {
+        total_samples: 0,
+        ..info
+    };
+    encode_stream(&mut source, spec, None, &Metadata::new(), output, options)
+}
+
+fn encode_stream<S: FrameSource, W: Write + Seek>(
+    source: &mut S,
+    mut info: StreamInfo,
+    expected_samples: Option<u64>,
+    base_metadata: &Metadata,
     mut output: W,
     options: &EncodeOptions,
 ) -> Result<EncodeSummary> {
     options.validate()?;
-    let mut wav = WavReader::open(input)?;
-    let wav_info = wav.info().clone();
-    let info = wav_info.spec;
 
-    let mut metadata = wav_info.metadata.clone();
+    let mut metadata = base_metadata.clone();
     for entry in options.metadata.entries() {
         metadata.set(entry.key.clone(), entry.value.clone())?;
     }
@@ -130,9 +176,11 @@ pub fn encode_wav<R: Read + Seek, W: Write + Seek>(
     }
 
     let block_size = options.block_size;
+    // The sample count is only known after the source reaches EOF. The
+    // header is patched with the final counts and checksums at the end.
+    info.total_samples = 0;
     let mut header = StreamHeader::new(info, metadata_bytes.len() as u64);
     output.seek(SeekFrom::Start(0))?;
-    // The header is patched with final counts and checksums after encoding.
     output.write_all(&header.to_bytes())?;
     output.write_all(&metadata_bytes)?;
 
@@ -141,21 +189,21 @@ pub fn encode_wav<R: Read + Seek, W: Write + Seek>(
     let mut planar = pcm::planar_channels(channels, block_size as usize);
     let mut encoded_channels = pcm::planar_channels(channels, block_size as usize);
     let mut total_crc = Crc32::new();
-    let mut remaining = info.total_samples;
     let mut next_sample = 0u64;
     let mut frame_index = 0u64;
     let mut min_block = u16::MAX;
     let mut max_block = 0u16;
     let mut pcm_total = 0u64;
 
-    while remaining > 0 {
-        let requested = (remaining.min(block_size as u64)) as usize;
-        let read = wav.read_frames(requested, &mut pcm_bytes)?;
-        if read != requested {
-            return Err(Error::invalid_wav(format!(
-                "WAV ended after {} of {requested} frames in block",
-                read
-            )));
+    loop {
+        let read = source.read_frames(block_size as usize, &mut pcm_bytes)?;
+        if read == 0 {
+            break;
+        }
+        if read > block_size as usize {
+            return Err(Error::argument(
+                "PCM source returned more frames than requested",
+            ));
         }
         pcm::planar_from_interleaved(&info, &pcm_bytes, read, &mut planar)?;
         let block_crc = crc32(&pcm_bytes);
@@ -172,7 +220,7 @@ pub fn encode_wav<R: Read + Seek, W: Write + Seek>(
             // are linear and benefit from LPC like integer PCM does.
             allow_lpc: true,
         };
-        let mut bits = BitWriter::with_capacity(requested * channels * 2);
+        let mut bits = BitWriter::with_capacity(read * channels * 2);
         for (channel, samples) in encoded_channels.iter().enumerate().take(channels) {
             let bps = info.encoded_bps(assignment, channel);
             let keys_are_floats = info.sample_format == SampleFormat::Float
@@ -222,22 +270,22 @@ pub fn encode_wav<R: Read + Seek, W: Write + Seek>(
         output.write_all(&frame)?;
 
         next_sample += read as u64;
-        remaining -= read as u64;
         frame_index += 1;
         min_block = min_block.min(read as u16);
         max_block = max_block.max(read as u16);
-        if remaining > 0 && read as u64 != block_size as u64 {
-            return Err(Error::invalid_wav("short WAV block"));
+    }
+
+    source.finish()?;
+    if let Some(expected) = expected_samples {
+        if next_sample != expected {
+            return Err(Error::invalid_pcm(format!(
+                "expected {expected} sample frames but read {next_sample}"
+            )));
         }
     }
 
-    if next_sample != info.total_samples {
-        return Err(Error::invalid_wav("WAV sample count changed while reading"));
-    }
-    if wav.remaining_bytes() != 0 {
-        return Err(Error::invalid_wav("WAV has unread data bytes"));
-    }
-
+    info.total_samples = next_sample;
+    header.info.total_samples = next_sample;
     header.frame_count = frame_index;
     header.min_block_size = if frame_index > 0 { min_block } else { 0 };
     header.max_block_size = if frame_index > 0 { max_block } else { 0 };
@@ -258,6 +306,65 @@ pub fn encode_wav<R: Read + Seek, W: Write + Seek>(
         min_block_size: header.min_block_size,
         max_block_size: header.max_block_size,
     })
+}
+
+/// A sequential source of canonical interleaved PCM frames.
+trait FrameSource {
+    /// Read up to `frames` frames. Returns zero at EOF and must never return
+    /// a partial sample frame.
+    fn read_frames(&mut self, frames: usize, out: &mut Vec<u8>) -> Result<usize>;
+
+    /// Validate that the source was consumed exactly to its end.
+    fn finish(&mut self) -> Result<()>;
+}
+
+impl<R: Read + Seek> FrameSource for WavReader<R> {
+    fn read_frames(&mut self, frames: usize, out: &mut Vec<u8>) -> Result<usize> {
+        WavReader::read_frames(self, frames, out)
+    }
+
+    fn finish(&mut self) -> Result<()> {
+        if self.remaining_bytes() != 0 {
+            return Err(Error::invalid_wav("WAV has unread data bytes"));
+        }
+        Ok(())
+    }
+}
+
+struct RawPcmSource<R> {
+    reader: R,
+    block_align: usize,
+}
+
+impl<R: Read> FrameSource for RawPcmSource<R> {
+    fn read_frames(&mut self, frames: usize, out: &mut Vec<u8>) -> Result<usize> {
+        let bytes = frames
+            .checked_mul(self.block_align)
+            .ok_or_else(|| Error::limit("PCM block size overflow"))?;
+        out.clear();
+        out.resize(bytes, 0);
+        let mut filled = 0;
+        while filled < bytes {
+            match self.reader.read(&mut out[filled..]) {
+                Ok(0) => break,
+                Ok(read) => filled += read,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(Error::Io(error)),
+            }
+        }
+        out.truncate(filled);
+        let extra = filled % self.block_align;
+        if extra != 0 {
+            return Err(Error::invalid_pcm(format!(
+                "input ends with {extra} extra byte(s), which is not a whole sample frame"
+            )));
+        }
+        Ok(filled / self.block_align)
+    }
+
+    fn finish(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 fn choose_assignment(

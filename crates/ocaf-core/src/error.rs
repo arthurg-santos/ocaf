@@ -13,6 +13,8 @@ pub enum Error {
     Io(io::Error),
     /// The input WAV file is malformed or uses an unsupported layout.
     InvalidWav(String),
+    /// A raw PCM stream is malformed (for example, a partial sample frame).
+    InvalidPcm(String),
     /// The OCAF file is malformed.
     InvalidOcaf(String),
     /// The file is valid but uses a feature this build does not support.
@@ -28,6 +30,10 @@ pub enum Error {
 impl Error {
     pub fn invalid_wav(msg: impl Into<String>) -> Self {
         Error::InvalidWav(msg.into())
+    }
+
+    pub fn invalid_pcm(msg: impl Into<String>) -> Self {
+        Error::InvalidPcm(msg.into())
     }
 
     pub fn invalid_ocaf(msg: impl Into<String>) -> Self {
@@ -56,6 +62,7 @@ impl fmt::Display for Error {
         match self {
             Error::Io(e) => write!(f, "I/O error: {e}"),
             Error::InvalidWav(m) => write!(f, "invalid WAV file: {m}"),
+            Error::InvalidPcm(m) => write!(f, "invalid PCM input: {m}"),
             Error::InvalidOcaf(m) => write!(f, "invalid OCAF file: {m}"),
             Error::Unsupported(m) => write!(f, "unsupported feature: {m}"),
             Error::Corrupt(m) => write!(f, "integrity check failed: {m}"),
