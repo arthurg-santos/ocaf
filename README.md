@@ -14,7 +14,7 @@ This repository contains the reference implementation:
 - `ocaf` — command-line encoder, decoder, player, inspector, verifier and
   benchmark tool.
 
-**Status:** format 1.0, reference implementation 0.2.0, open source under the
+**Status:** format 1.0, reference implementation 0.3.0, open source under the
 MIT license. The codec is real, tested and bit-exact, but it has not been
 security-reviewed for untrusted media and is not yet a drop-in replacement for
 a mature codec such as FLAC.
@@ -57,6 +57,22 @@ WAV input may be plain PCM, IEEE float or `WAVE_FORMAT_EXTENSIBLE`. A
 decode. Decoded WAV files contain the same canonical interleaved PCM bytes as
 the source; WAV container headers are regenerated rather than byte-copied.
 
+### Other input formats
+
+`ocaf encode` also accepts formats that FFmpeg can decode: MP3, FLAC, ALAC,
+AAC/M4A, Ogg Vorbis, Opus, WMA, AIFF, CAF, and the audio track of video files.
+This uses an installed `ffmpeg` and `ffprobe` (found in `PATH`, or selected
+with `--ffmpeg PATH` and `--ffprobe PATH`); they are not bundled with OCAF.
+
+OCAF is a PCM codec, so it stores the samples produced by the decoder, not the
+original compressed bitstream. Lossless sources such as FLAC, ALAC and AIFF
+keep their PCM exactly. Lossy sources default to the decoder's 32-bit float
+output, which is preserved bit-exactly but can be much larger than the source.
+Use `--pcm-format s16` to store 16-bit integer PCM instead; that conversion is
+smaller and explicitly lossy relative to the float decode. Container tags are
+not imported automatically; use `--title`, `--artist`, `--album`, `--meta`
+and the other metadata options.
+
 ## Install
 
 Requirements: Rust 1.75+ and Cargo. No C compiler or system library is needed.
@@ -85,7 +101,7 @@ cargo build --release
 .\target\release\ocaf.exe --version
 ```
 
-A portable `ocaf-0.2.0-windows-x86_64.zip` can be produced from Linux with
+A portable `ocaf-0.3.0-windows-x86_64.zip` can be produced from Linux with
 `./scripts/build-windows.sh`, or downloaded from the Windows GitHub Actions
 workflow. The zip can also be sent directly to testers. The archive contains
 `ocaf.exe`, a Portuguese quick-start (`LEIA-ME.txt`), the MIT license, a
@@ -96,9 +112,17 @@ Wine testing, packaging and tester instructions.
 ## Usage
 
 ```sh
-# Encode, with optional metadata
+# Encode a WAV, with optional metadata
 ocaf encode music.wav music.ocaf \
   --title "Example" --artist "Arthur" --album "Demo" --tracknumber 1
+
+# Encode FLAC, MP3, AAC/M4A, Ogg, Opus, WMA, AIFF or a video's audio track
+# (requires ffmpeg and ffprobe in PATH)
+ocaf encode music.flac music.ocaf
+ocaf encode song.mp3 song.ocaf
+
+# Store 16-bit integer PCM instead of the default float decode of a lossy file
+ocaf encode song.mp3 song-s16.ocaf --pcm-format s16
 
 # Decode and verify the bitstream
 ocaf decode music.ocaf restored.wav
@@ -123,6 +147,9 @@ ocaf benchmark music.wav --iterations 5
 Useful encoder options:
 
 ```text
+--pcm-format FORMAT     auto (default), s16, s24, s32, f32 or f64
+--ffmpeg PATH           FFmpeg executable (default: found in PATH)
+--ffprobe PATH          FFprobe executable (default: sibling or PATH)
 --block-size N          Samples per frame (default 16384, 1..=65535)
 --max-lpc-order N       Maximum LPC order (default 12, 0..=32)
 --max-partition-order N Maximum Rice partition order (default 6, 0..=8)
@@ -130,6 +157,11 @@ Useful encoder options:
 --meta KEY=VALUE        Arbitrary metadata entry (repeatable)
 --force                 Overwrite an existing output file
 ```
+
+`auto` keeps the source's integer depth when the decoder reports one (16, 24
+or 32 bits) and uses float32/float64 when the decoder produces floating-point
+samples. `--pcm-format` applies to formats decoded by FFmpeg; WAV files keep
+their native sample format.
 
 The `encode` and `decode` commands write through a temporary file and rename
 atomically, so an interrupted run does not leave a half-written output behind.
@@ -161,6 +193,11 @@ fn main() -> ocaf_core::Result<()> {
     Ok(())
 }
 ```
+
+For raw PCM, `encode_pcm(reader, StreamInfo { .. }, output, &options)` reads
+interleaved little-endian samples until EOF and writes the discovered sample
+count into the header. The output must be seekable, but the input does not
+have to be, so a decoder pipe can be encoded without a temporary WAV file.
 
 `ocaf-core` is not yet published on crates.io. Depend on it with a path or a
 Git dependency while the format and API are pre-1.0.
@@ -272,6 +309,7 @@ they are deterministic and independent.
 │       └── src
 │           ├── main.rs         argument parsing and help
 │           ├── commands.rs     command implementations
+│           ├── input.rs        format detection and FFmpeg decoding
 │           └── format.rs       human-readable formatting
 ├── scripts
 │   ├── generate_corpus.py      deterministic benchmark WAV corpus
@@ -293,8 +331,12 @@ they are deterministic and independent.
   2.7–12.4 MB/s; decoding is much faster (34–128 MB/s).
 - There is no seek index yet. `info` reads only the header and metadata, but
   decoding an arbitrary position requires decoding from the start.
-- WAV input and output require seekable files; there is no stdin/stdout pipe
-  mode.
+- OCAF files are written to seekable files because the header is patched at
+  the end. Raw PCM input can be streamed through `encode_pcm`; non-WAV inputs
+  are streamed directly from FFmpeg without a temporary WAV.
+- Non-WAV input requires a separate FFmpeg installation (`ffmpeg` and
+  `ffprobe`). The release archives do not bundle it, and the OCAF encoder
+  itself still has no external dependencies.
 - `play` is not a streaming player: it decodes and verifies the entire file to
   a temporary WAV before playback starts, and it requires a system audio
   player.

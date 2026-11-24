@@ -10,6 +10,8 @@ release is a single `ocaf.exe` with no installer and no MinGW runtime DLLs.
 - For building: Rust 1.75 or newer with Cargo.
 - For cross-compiling from Linux: the `x86_64-pc-windows-gnu` Rust target and
   a MinGW-w64 linker.
+- For encoding MP3, FLAC, AAC/M4A and other non-WAV inputs: FFmpeg
+  (`ffmpeg.exe` and `ffprobe.exe`) installed and available in `PATH`.
 
 ## Build natively on Windows
 
@@ -45,7 +47,7 @@ The script builds `ocaf.exe`, creates a portable zip in `dist/`, and writes a
 SHA-256 checksum. The current archive is:
 
 ```text
-dist/ocaf-0.2.0-windows-x86_64.zip
+dist/ocaf-0.3.0-windows-x86_64.zip
 ```
 
 ## Test on Linux with Wine
@@ -61,6 +63,14 @@ export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER=wine
 rustup target add x86_64-pc-windows-gnu
 cargo test --target x86_64-pc-windows-gnu --workspace -- --test-threads=1
 wine target/x86_64-pc-windows-gnu/release/ocaf.exe --version
+```
+
+The external-format tests skip themselves when `ffmpeg` and `ffprobe` are not
+available. To run them under Wine, point `WINEPATH` at a Windows FFmpeg build:
+
+```sh
+export WINEPATH="/path/to/ffmpeg/bin"
+cargo test --target x86_64-pc-windows-gnu -p ocaf-cli --test cli -- --test-threads=1
 ```
 
 The release binary imports only standard Windows system DLLs
@@ -97,6 +107,44 @@ Get-FileHash .\ocaf.exe -Algorithm SHA256
 
 Compare the result with `SHA256SUMS.txt`.
 
+## Encoding MP3, FLAC and other formats
+
+`ocaf.exe` reads WAV natively. For other formats it uses FFmpeg to decode the
+audio to PCM and then encodes that PCM into OCAF. Install FFmpeg so that
+`ffmpeg.exe` and `ffprobe.exe` are in `PATH`:
+
+```powershell
+winget install Gyan.FFmpeg
+# or: choco install ffmpeg -y
+```
+
+Open a new terminal after installing, then:
+
+```powershell
+ocaf.exe encode musica.flac musica.ocaf
+ocaf.exe encode musica.mp3 musica.ocaf
+ocaf.exe encode musica.mp3 musica-s16.ocaf --pcm-format s16
+ocaf.exe encode "C:\Videos\show.mp4" audio.ocaf
+```
+
+If FFmpeg is not in `PATH`, pass the executables explicitly:
+
+```powershell
+ocaf.exe encode musica.flac musica.ocaf `
+  --ffmpeg "C:\ffmpeg\bin\ffmpeg.exe" `
+  --ffprobe "C:\ffmpeg\bin\ffprobe.exe"
+```
+
+OCAF stores the decoded PCM, not the original compressed bitstream. FLAC,
+ALAC and AIFF keep their PCM exactly. Lossy sources default to the decoder's
+32-bit float output, which is bit-exact relative to that decode but can be
+much larger than the source. Use `--pcm-format s16` for a smaller archive;
+that conversion is explicitly lossy. Container tags are not imported
+automatically, so use `--title`, `--artist`, `--album` and `--meta` if needed.
+
+The portable zip still contains only `ocaf.exe`; FFmpeg is a separate
+installation and is not redistributed with OCAF.
+
 ## Playing audio
 
 `ocaf.exe play musica.ocaf` decodes the file and hands it to an installed
@@ -111,8 +159,8 @@ there is a delay before sound starts on long files.
 ## Limits
 
 - The prebuilt archive is `x86_64` only. It does not run on 32-bit Windows.
-- OCAF accepts WAV input, not MP3/AAC/FLAC directly. Convert those to WAV
-  first if needed.
+- Non-WAV input needs a separate FFmpeg installation with both `ffmpeg.exe`
+  and `ffprobe.exe`. Without FFmpeg, only WAV input works.
 - Decoding regenerates a canonical WAV header; the PCM audio is bit-exact.
 - `play` needs an installed system player and is not a streaming player.
 - The binary is portable but unsigned. There is no MSI installer or

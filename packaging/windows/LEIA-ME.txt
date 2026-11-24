@@ -1,4 +1,4 @@
-OCAF 0.2.0 — Windows x86_64
+OCAF 0.3.0 — Windows x86_64
 ================================
 
 OCAF (Onood's Compressed Audio File) é um codec de áudio lossless.
@@ -40,13 +40,32 @@ Se o caminho tiver espaços, use aspas:
 
   ocaf.exe encode "C:\Minha Música\musica.wav" "C:\Minha Música\musica.ocaf"
 
-O OCAF recebe WAV (PCM 16/24/32 bits ou float 32/64 bits).
-Ele não abre MP3, AAC ou FLAC diretamente; converta para WAV antes
-(por exemplo, com ffmpeg ou Audacity).
+O OCAF lê WAV nativamente (PCM 16/24/32 bits ou float 32/64 bits).
+Para MP3, FLAC, AAC/M4A, Ogg, Opus, WMA, AIFF e vídeos, instale o
+FFmpeg (ffmpeg.exe e ffprobe.exe) e deixe os dois no PATH:
+
+  winget install Gyan.FFmpeg
+  ou: choco install ffmpeg -y
+
+Depois abra um terminal novo e use, por exemplo:
+
+  ocaf.exe encode musica.flac musica.ocaf
+  ocaf.exe encode musica.mp3 musica.ocaf
+  ocaf.exe encode musica.mp3 musica-s16.ocaf --pcm-format s16
+
+O OCAF guarda o PCM decodificado, não o arquivo comprimido original.
+FLAC, ALAC e AIFF mantêm o PCM exato. Para fontes com perda (MP3, AAC,
+Ogg, Opus, WMA), o padrão é o float 32 bits do decodificador, que é
+bit-exato em relação a essa decodificação, mas pode ficar bem maior
+que o original. Use --pcm-format s16 para um arquivo menor; essa
+conversão tem perda em relação ao float. As tags do arquivo original
+não são copiadas automaticamente; use --title, --artist, --album etc.
 
 Comandos úteis
 --------------
   ocaf.exe encode entrada.wav saida.ocaf
+  ocaf.exe encode entrada.flac saida.ocaf
+  ocaf.exe encode entrada.mp3 saida.ocaf --pcm-format s16
   ocaf.exe decode saida.ocaf restaurada.wav
   ocaf.exe play saida.ocaf
   ocaf.exe play saida.ocaf --player "C:\Program Files\mpv\mpv.exe"
@@ -67,7 +86,9 @@ Observações
   - O comando play usa ffplay, mpv ou vlc se estiverem instalados; caso
     contrário usa o player do PowerShell, que só toca WAV PCM inteiro.
   - O play decodifica e verifica o arquivo inteiro antes de começar o som.
-  - Esta é uma versão de teste 0.2.0, sem auditoria de segurança.
+  - Para formatos diferentes de WAV, o ffmpeg.exe e o ffprobe.exe precisam
+    estar no PATH. Eles não vêm dentro deste zip.
+  - Esta é uma versão de teste 0.3.0, sem auditoria de segurança.
 
 Ao reportar um problema, envie:
   - a saída de `ocaf.exe --version`;

@@ -28,6 +28,12 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Install FFmpeg
+        run: |
+          choco install ffmpeg -y --no-progress
+          ffmpeg -version
+          ffprobe -version
+
       - name: Run tests
         run: cargo test --workspace -- --test-threads=1
 

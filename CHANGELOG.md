@@ -2,7 +2,40 @@
 
 All notable changes to OCAF are documented here. The format version and the
 implementation version are separate: this release implements OCAF format 1.0
-with the `ocaf` 0.2.0 reference implementation.
+with the `ocaf` 0.3.0 reference implementation.
+
+## [0.3.0] - 2026-11-24
+
+### Added
+
+- `ocaf encode` accepts MP3, FLAC, ALAC, AAC/M4A, Ogg Vorbis, Opus, WMA,
+  AIFF, CAF and the audio track of video files through an installed FFmpeg.
+  `ffmpeg` and `ffprobe` are located in `PATH`, or selected with `--ffmpeg`
+  and `--ffprobe`.
+- External inputs are decoded to raw PCM and streamed directly into the
+  encoder; no temporary WAV file is created.
+- `--pcm-format auto|s16|s24|s32|f32|f64` controls the stored PCM format for
+  external inputs. `auto` keeps 16/24/32-bit integer sources at their native
+  depth and preserves the decoder's float output for lossy sources.
+- Automatic channel-mask mapping from FFmpeg channel layouts, and a
+  `SOURCE_CODEC` metadata entry for non-WAV inputs.
+- `ocaf_core::encode_pcm`, a public streaming encoder for canonical
+  interleaved PCM that discovers the sample count at EOF.
+- Compressed WAV variants and RF64 files rejected by the native WAV reader
+  fall back to FFmpeg decoding.
+- CLI integration tests for bit-exact FLAC, MP3 float and MP3 s16 encoding,
+  missing FFmpeg diagnostics and the new options.
+
+### Changed
+
+- WAV files are still parsed natively and require no external tools.
+  `--pcm-format` is rejected for native WAV input, which keeps its own sample
+  format.
+- The Windows CI workflow installs FFmpeg so the external-decoding path is
+  exercised on Windows as well.
+
+The codec, bitstream format and compression behavior are unchanged from
+0.2.0. The benchmark measurements in `BENCHMARKS.md` remain representative.
 
 ## [0.2.0] - 2026-11-23
 

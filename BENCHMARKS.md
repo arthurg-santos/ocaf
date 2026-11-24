@@ -21,9 +21,10 @@ the machine and ambient load).
 The machine was not isolated: it is a normal Fedora desktop session. Each
 timing is the best of three runs to reduce scheduler noise. Only sizes and
 bit-exactness are deterministic; treat throughput as indicative rather than a
-laboratory measurement. The measurements were taken with 0.1.0. Versions 0.1.1
-and 0.2.0 change only CLI behavior (relative output paths and the `play`
-command) and do not change the codec or the encoded output.
+laboratory measurement. The measurements were taken with 0.1.0. Versions 0.1.1,
+0.2.0 and 0.3.0 change only CLI behavior (relative output paths, the `play`
+command and FFmpeg input decoding) and do not change the codec or the encoded
+output.
 
 ## 2. Corpus
 

@@ -119,8 +119,8 @@ Every user-visible version gets a Git tag and a GitHub Release.
 4. Create an annotated tag and push it:
 
    ```sh
-   git tag -a v0.2.0 -m "OCAF 0.2.0"
-   git push origin v0.2.0
+   git tag -a v0.3.0 -m "OCAF 0.3.0"
+   git push origin v0.3.0
    ```
 
 The `Release` workflow runs on every `v*` tag. It verifies that the tag matches
